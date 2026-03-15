@@ -1,0 +1,332 @@
+import { useState, useEffect, useRef } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import api from "../../api";
+import toast from "react-hot-toast";
+import { Camera, X, ChevronRight, ChevronLeft, Check } from "lucide-react";
+
+type Category = { id: number; name: string; slug: string; documentRequirements: DocReq[] };
+type DocReq = { id: number; name: string; description: string | null; isRequired: boolean };
+
+const STEPS_AGENT = ["Basic Info", "Categories", "Documents", "Bank Details"];
+
+export default function Register() {
+  const [role, setRoleState] = useState<"USER" | "AGENT">("USER");
+  const [step, setStep] = useState(0);
+  const [form, setForm] = useState({ email: "", password: "", name: "", address: "", pin: "", city: "", phone: "" });
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [docFiles, setDocFiles] = useState<Record<number, File>>({});
+  const [docPreviews, setDocPreviews] = useState<Record<number, string>>({});
+  const [bankForm, setBankForm] = useState({ accountNumber: "", holderName: "", ifscCode: "", bankName: "" });
+  const [loading, setLoading] = useState(false);
+  const [cities, setCities] = useState<{ id: number; name: string; state: string | null }[]>([]);
+  const [citySuggestions, setCitySuggestions] = useState<typeof cities>([]);
+  const [showCitySuggestions, setShowCitySuggestions] = useState(false);
+  const cityRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    api.get("/auth/cities/active").then((r) => setCities(r.data.cities)).catch(() => {});
+    api.get("/auth/categories/active").then((r) => setCategories(r.data.categories)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (cityRef.current && !cityRef.current.contains(e.target as Node)) setShowCitySuggestions(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const val = e.target.value;
+    setForm({ ...form, [k]: val });
+    if (k === "city") {
+      const q = val.trim().toLowerCase();
+      setCitySuggestions(q ? cities.filter((c) => c.name.includes(q)).slice(0, 8) : []);
+      setShowCitySuggestions(!!q);
+    }
+  };
+
+  const pickCity = (name: string) => { setForm({ ...form, city: name }); setShowCitySuggestions(false); };
+
+  const toggleCategory = (id: number) => {
+    setSelectedCategoryIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+
+  const handleDocFile = (reqId: number) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(file.type)) {
+      toast.error("Only JPEG, PNG and WebP images are allowed"); return;
+    }
+    if (file.size > 5 * 1024 * 1024) { toast.error("File size must be under 5 MB"); return; }
+    setDocFiles((prev) => ({ ...prev, [reqId]: file }));
+    setDocPreviews((prev) => ({ ...prev, [reqId]: URL.createObjectURL(file) }));
+  };
+
+  const removeDoc = (reqId: number) => {
+    setDocFiles((prev) => { const n = { ...prev }; delete n[reqId]; return n; });
+    setDocPreviews((prev) => { const n = { ...prev }; delete n[reqId]; return n; });
+  };
+
+  const selectedCategories = categories.filter((c) => selectedCategoryIds.includes(c.id));
+  const allDocReqs = selectedCategories.flatMap((c) => c.documentRequirements);
+  const uniqueDocReqs = allDocReqs.filter((r, i) => allDocReqs.findIndex((x) => x.name === r.name) === i);
+  const requiredDocs = uniqueDocReqs.filter((r) => r.isRequired);
+
+  const canProceedStep = (s: number): boolean => {
+    if (s === 0) return !!form.name && !!form.email && !!form.password && !!form.address && !!form.pin;
+    if (s === 1) return selectedCategoryIds.length > 0;
+    if (s === 2) return requiredDocs.every((r) => docFiles[r.id]);
+    return true;
+  };
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    setLoading(true);
+    try {
+      if (role === "AGENT") {
+        const fd = new FormData();
+        fd.append("email", form.email);
+        fd.append("password", form.password);
+        fd.append("name", form.name);
+        fd.append("address", form.address);
+        fd.append("pin", form.pin);
+        fd.append("city", form.city);
+        fd.append("phone", form.phone);
+        fd.append("categoryIds", JSON.stringify(selectedCategoryIds));
+        fd.append("type", selectedCategories[0]?.slug || "plumber");
+        Object.entries(docFiles).forEach(([reqId, file]) => { fd.append(`doc_${reqId}`, file); });
+        if (bankForm.accountNumber) {
+          fd.append("accountNumber", bankForm.accountNumber);
+          fd.append("holderName", bankForm.holderName);
+          fd.append("ifscCode", bankForm.ifscCode);
+          fd.append("bankName", bankForm.bankName);
+        }
+        await api.post("/auth/agent/register", fd, { headers: { "Content-Type": "multipart/form-data" } });
+        toast.success("Registration submitted! You can login and check verification status.");
+      } else {
+        await api.post("/auth/user/register", {
+          email: form.email, password: form.password, name: form.name,
+          address: form.address, pin: form.pin, city: form.city, phone: form.phone,
+        });
+        toast.success("Registration successful! Please login.");
+      }
+      navigate("/login");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Registration failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const inputCls = "w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-md focus:ring-1 focus:ring-gray-400 focus:bg-white outline-none text-sm";
+
+  const CityField = () => (
+    <div className="relative" ref={cityRef}>
+      <input type="text" value={form.city} onChange={set("city")}
+        onFocus={() => { if (form.city.trim()) setShowCitySuggestions(true); }}
+        className={inputCls} placeholder="City" />
+      {showCitySuggestions && citySuggestions.length > 0 && (
+        <div className="absolute z-20 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-32 overflow-y-auto">
+          {citySuggestions.map((c) => (
+            <button key={c.id} type="button" onClick={() => pickCity(c.name)}
+              className="w-full text-left px-2.5 py-1.5 hover:bg-gray-50 text-xs capitalize border-b border-gray-50 last:border-0">
+              {c.name} {c.state && <span className="text-[10px] text-gray-400">({c.state})</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // ─── USER REGISTRATION ────────────────────────────
+  if (role === "USER") {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg border border-gray-200 w-full max-w-sm p-6">
+          <div className="text-center mb-5">
+            <h1 className="text-lg font-bold text-gray-900">Create Account</h1>
+            <p className="text-gray-400 text-xs mt-0.5">Join Urban<span className="text-amber-500">Comp</span> today</p>
+          </div>
+          <div className="flex gap-1 bg-gray-100 rounded-md p-0.5 mb-4">
+            {(["USER", "AGENT"] as const).map((r) => (
+              <button key={r} onClick={() => { setRoleState(r); setStep(0); }}
+                className={`flex-1 py-2 text-xs font-semibold rounded-md transition ${role === r ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"}`}>
+                {r === "USER" ? "Customer" : "Service Partner"}
+              </button>
+            ))}
+          </div>
+          <form onSubmit={handleSubmit} className="space-y-2.5">
+            <input type="text" required value={form.name} onChange={set("name")} className={inputCls} placeholder="Full name" />
+            <input type="email" required value={form.email} onChange={set("email")} className={inputCls} placeholder="Email address" />
+            <input type="password" required value={form.password} onChange={set("password")} className={inputCls} placeholder="Password" />
+            <input type="tel" value={form.phone} onChange={set("phone")} className={inputCls} placeholder="Phone number (optional)" />
+            <input type="text" required value={form.address} onChange={set("address")} className={inputCls} placeholder="Address" />
+            <div className="grid grid-cols-2 gap-2">
+              <input type="text" required value={form.pin} onChange={set("pin")} className={inputCls} placeholder="PIN code" />
+              <CityField />
+            </div>
+            <button type="submit" disabled={loading}
+              className="w-full py-2.5 bg-gray-900 text-white rounded-full text-sm font-semibold hover:bg-gray-800 active:scale-[0.98] disabled:opacity-50 transition-all shadow-sm mt-1">
+              {loading ? "Registering..." : "Create Account"}
+            </button>
+          </form>
+          <p className="text-center text-xs text-gray-400 mt-5">
+            Already have an account?{" "}
+            <Link to="/login" className="text-gray-900 hover:underline font-semibold">Sign In</Link>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── AGENT MULTI-STEP REGISTRATION ────────────────
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg border border-gray-200 w-full max-w-md p-6">
+        <div className="text-center mb-4">
+          <h1 className="text-lg font-bold text-gray-900">Become a Partner</h1>
+          <p className="text-gray-400 text-xs mt-0.5">Join Urban<span className="text-amber-500">Comp</span> as a service provider</p>
+        </div>
+
+        <div className="flex gap-1 bg-gray-100 rounded-md p-0.5 mb-4">
+          {(["USER", "AGENT"] as const).map((r) => (
+            <button key={r} onClick={() => { setRoleState(r); setStep(0); }}
+              className={`flex-1 py-2 text-xs font-semibold rounded-md transition ${role === r ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"}`}>
+              {r === "USER" ? "Customer" : "Service Partner"}
+            </button>
+          ))}
+        </div>
+
+        {/* Step indicator */}
+        <div className="flex items-center gap-1 mb-5">
+          {STEPS_AGENT.map((s, i) => (
+            <div key={s} className="flex-1 flex flex-col items-center">
+              <div className={`w-full h-1 rounded-full mb-1 transition-colors ${i <= step ? "bg-gray-900" : "bg-gray-200"}`} />
+              <span className={`text-[10px] ${i <= step ? "text-gray-900 font-semibold" : "text-gray-400"}`}>{s}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* STEP 0: Basic Info */}
+        {step === 0 && (
+          <div className="space-y-2.5">
+            <input type="text" value={form.name} onChange={set("name")} className={inputCls} placeholder="Full name" />
+            <input type="email" value={form.email} onChange={set("email")} className={inputCls} placeholder="Email address" />
+            <input type="password" value={form.password} onChange={set("password")} className={inputCls} placeholder="Password" />
+            <input type="tel" value={form.phone} onChange={set("phone")} className={inputCls} placeholder="Phone number (optional)" />
+            <input type="text" value={form.address} onChange={set("address")} className={inputCls} placeholder="Address" />
+            <div className="grid grid-cols-2 gap-2">
+              <input type="text" value={form.pin} onChange={set("pin")} className={inputCls} placeholder="PIN code" />
+              <CityField />
+            </div>
+          </div>
+        )}
+
+        {/* STEP 1: Category Selection */}
+        {step === 1 && (
+          <div>
+            <p className="text-sm text-gray-600 mb-3">Select the services you provide:</p>
+            {categories.length === 0 ? (
+              <p className="text-gray-400 text-sm text-center py-6">No categories available</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {categories.map((cat) => {
+                  const selected = selectedCategoryIds.includes(cat.id);
+                  return (
+                    <button key={cat.id} type="button" onClick={() => toggleCategory(cat.id)}
+                      className={`p-3 rounded-lg border-2 text-left transition-all ${selected ? "border-gray-900 bg-gray-50" : "border-gray-200 hover:border-gray-300"}`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-semibold text-gray-900 capitalize">{cat.name}</span>
+                        {selected && <Check size={14} className="text-gray-900" />}
+                      </div>
+                      <p className="text-[10px] text-gray-400">{cat.documentRequirements.length} doc{cat.documentRequirements.length !== 1 ? "s" : ""} required</p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* STEP 2: Document Uploads */}
+        {step === 2 && (
+          <div>
+            <p className="text-sm text-gray-600 mb-3">Upload required documents for your selected categories:</p>
+            {uniqueDocReqs.length === 0 ? (
+              <p className="text-gray-400 text-sm text-center py-4">No documents required. You can proceed!</p>
+            ) : (
+              <div className="space-y-3">
+                {uniqueDocReqs.map((req) => (
+                  <div key={req.id}>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <label className="block text-[11px] text-gray-500 uppercase font-medium">{req.name}</label>
+                      {req.isRequired && <span className="text-[9px] text-red-500 font-bold">REQUIRED</span>}
+                    </div>
+                    {req.description && <p className="text-[10px] text-gray-400 mb-1">{req.description}</p>}
+                    {docPreviews[req.id] ? (
+                      <div className="relative rounded-md overflow-hidden border border-gray-200 bg-gray-50">
+                        <img src={docPreviews[req.id]} alt={req.name} className="w-full h-24 object-cover" />
+                        <button type="button" onClick={() => removeDoc(req.id)}
+                          className="absolute top-1 right-1 bg-white/90 rounded-full p-0.5 shadow hover:bg-red-50">
+                          <X size={12} className="text-red-500" />
+                        </button>
+                        <p className="text-[10px] text-gray-400 text-center py-0.5 truncate px-1">{docFiles[req.id]?.name}</p>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center h-24 border-2 border-dashed border-gray-200 rounded-md cursor-pointer hover:border-gray-400 transition">
+                        <Camera size={18} className="text-gray-300 mb-0.5" />
+                        <span className="text-[11px] text-gray-400">Upload</span>
+                        <span className="text-[9px] text-gray-300">JPEG, PNG, WebP · 5 MB</span>
+                        <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleDocFile(req.id)} />
+                      </label>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* STEP 3: Bank Details */}
+        {step === 3 && (
+          <div className="space-y-2.5">
+            <p className="text-sm text-gray-600 mb-1">Bank details for payouts (optional — add later from profile):</p>
+            <input value={bankForm.holderName} onChange={(e) => setBankForm({ ...bankForm, holderName: e.target.value })} className={inputCls} placeholder="Account holder name" />
+            <input value={bankForm.accountNumber} onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value })} className={inputCls} placeholder="Account number" />
+            <input value={bankForm.ifscCode} onChange={(e) => setBankForm({ ...bankForm, ifscCode: e.target.value })} className={inputCls} placeholder="IFSC code" />
+            <input value={bankForm.bankName} onChange={(e) => setBankForm({ ...bankForm, bankName: e.target.value })} className={inputCls} placeholder="Bank name" />
+          </div>
+        )}
+
+        {/* Navigation Buttons */}
+        <div className="flex gap-2 mt-5">
+          {step > 0 && (
+            <button type="button" onClick={() => setStep(step - 1)}
+              className="flex items-center gap-1 px-4 py-2.5 bg-gray-100 text-gray-600 rounded-full text-sm font-semibold hover:bg-gray-200 active:scale-[0.97] transition-all">
+              <ChevronLeft size={14} /> Back
+            </button>
+          )}
+          {step < 3 ? (
+            <button type="button" onClick={() => setStep(step + 1)} disabled={!canProceedStep(step)}
+              className="flex-1 flex items-center justify-center gap-1 py-2.5 bg-gray-900 text-white rounded-full text-sm font-semibold hover:bg-gray-800 active:scale-[0.98] disabled:opacity-50 transition-all shadow-sm">
+              Next <ChevronRight size={14} />
+            </button>
+          ) : (
+            <button type="button" onClick={() => handleSubmit()} disabled={loading}
+              className="flex-1 py-2.5 bg-gray-900 text-white rounded-full text-sm font-semibold hover:bg-gray-800 active:scale-[0.98] disabled:opacity-50 transition-all shadow-sm">
+              {loading ? "Submitting..." : "Submit for Verification"}
+            </button>
+          )}
+        </div>
+
+        <p className="text-center text-xs text-gray-400 mt-5">
+          Already have an account?{" "}
+          <Link to="/login" className="text-gray-900 hover:underline font-semibold">Sign In</Link>
+        </p>
+      </div>
+    </div>
+  );
+}

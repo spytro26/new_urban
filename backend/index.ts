@@ -1,0 +1,88 @@
+import "dotenv/config";
+import express from "express";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import { pool } from "./db";
+import authRoutes from "./src/routes/auth.routes";
+import uploadRoutes from "./src/routes/upload.routes";
+import userRouter from "./src/routes/user.routes";
+import agentRouter from "./src/routes/agent.routes";
+import adminRouter from "./src/routes/admin.routes";
+import { env } from "./src/config/env";
+
+const app = express();
+
+// ─── Security headers ──────────────────────────────────────────────────
+app.use(helmet());
+
+// ─── Trust proxy (needed for correct IP behind nginx / reverse proxy) ──
+app.set("trust proxy", 1);
+
+// ─── Body parsing ──────────────────────────────────────────────────────
+app.use(express.json({ limit: "10kb" })); // prevent large payload attacks
+
+// ─── CORS ──────────────────────────────────────────────────────────────
+app.use((_req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+  );
+  res.header("Access-Control-Allow-Headers", "Content-Type,Authorization");
+  if (_req.method === "OPTIONS") {
+    res.sendStatus(204);
+    return;
+  }
+  next();
+});
+
+// ─── Rate limiters ─────────────────────────────────────────────────────
+
+// Global: 100 requests per minute per IP
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many requests, slow down. Try again in a minute." },
+});
+
+// Auth: strict — 10 login/register attempts per 15 min per IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many auth attempts. Try again after 15 minutes." },
+});
+
+// Uploads: 20 per 10 min per IP
+const uploadLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many uploads. Try again later." },
+});
+
+app.use(globalLimiter);
+
+// ─── Routes ────────────────────────────────────────────────────────────
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
+
+app.use("/api/auth", authLimiter, authRoutes);
+app.use("/api/upload", uploadLimiter, uploadRoutes);
+app.use("/api/users", userRouter);
+app.use("/api/agents", agentRouter);
+app.use("/api/admin", adminRouter);
+
+app.listen(env.PORT, () => {
+  console.log(`Server running on port ${env.PORT}`);
+});
+
+process.on("SIGTERM", async () => {
+  await pool.end();
+  process.exit(0);
+});

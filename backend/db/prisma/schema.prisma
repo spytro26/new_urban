@@ -1,0 +1,342 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma" // You must specify an output path
+}
+
+datasource db {
+  provider = "postgresql"
+  // Note: No 'url' field here anymore! It's in prisma.config.ts
+}
+
+enum status {
+  PENDING
+  ON_THEWAY
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum assignmentStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum materialApproval {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum paymentMethod {
+  CASH
+  ONLINE
+}
+
+enum paymentStatus {
+  PENDING
+  PAID
+  PARTIALLY_PAID
+  REFUNDED
+}
+
+enum documentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id       Int     @id @default(autoincrement())
+  name     String?
+  email    String  @unique
+  password String
+  phone    String?
+
+  order         OrderGroup[]
+  profilepic    String?
+  notifications notification[]
+  address       Address[]
+  createdAt     DateTime       @default(now())
+}
+
+model Address {
+  id      Int     @id @default(autoincrement())
+  address String
+  pin     String
+  city    String?
+  label   String? // e.g. "Home", "Office", "Other"
+  isUser  Boolean @default(true)
+  userId  Int?
+  agentId Int?
+
+  // users User @relation(fields: [userId], references: [userId])
+  users       User?  @relation(fields: [userId], references: [id])
+  agentAdress Agent? @relation(fields: [agentId], references: [id])
+
+  orderGroupsUser OrderGroup[] @relation("orderGroupUserAddress")
+
+  orderGroupsAgent OrderGroup[] @relation("orderGroupAgentAddress")
+}
+
+model bankDetails {
+  id            Int    @id @default(autoincrement())
+  accountNumber String
+  holderName    String
+  ifscCode      String
+  bankName      String
+  agentId       Int    @unique
+  agent         Agent? @relation(fields: [agentId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Agent {
+  id             Int                 @id @default(autoincrement())
+  name           String
+  type           String // legacy — kept for backward compat
+  email          String              @unique
+  isVerified     Boolean             @default(false)
+  isAvailable    Boolean             @default(true)
+  rating         Float?              @default(0)
+  ratingCount    Int                 @default(0)
+  password       String
+  orders         OrderGroup[]
+  bankDetails    bankDetails?
+  extraMaterials extraMaterial[]
+  settlements    MonthlySettlement[]
+  profilepic     String?
+  id_proof       String?
+  address_proof  String?
+  address        Address[]
+  assignments    OrderAssignment[]
+  categories     AgentCategory[]
+  documents      AgentDocument[]
+  createdAt      DateTime            @default(now())
+}
+
+model Admin {
+  id       Int    @id @default(autoincrement())
+  email    String @unique
+  password String
+
+  createdAt DateTime @default(now())
+}
+
+// ── Dynamic service categories (admin managed) ─────────────────────────
+model Category {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique // Display name: "Plumber", "Electrician", "Nurse"
+  slug        String   @unique // Lowercase key: "plumber", "electrician", "nurse"
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  documentRequirements DocumentRequirement[]
+  agentCategories      AgentCategory[]
+  subservices          subservice[]
+}
+
+// ── Required documents per category (admin configurable) ───────────────
+model DocumentRequirement {
+  id          Int      @id @default(autoincrement())
+  name        String // e.g. "Nursing License", "ID Proof", "Trade Certificate"
+  description String?
+  isRequired  Boolean  @default(true)
+  categoryId  Int
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  agentDocuments AgentDocument[]
+  createdAt      DateTime        @default(now())
+}
+
+// ── Agent ↔ Category pivot with per-category verification ──────────────
+model AgentCategory {
+  id            Int      @id @default(autoincrement())
+  agentId       Int
+  categoryId    Int
+  isVerified    Boolean  @default(false)
+  rejectionNote String? // admin can explain why rejected
+  agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  category      Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+
+  @@unique([agentId, categoryId])
+  @@index([agentId])
+  @@index([categoryId])
+}
+
+// ── Agent uploaded documents (per requirement) ─────────────────────────
+model AgentDocument {
+  id            Int                 @id @default(autoincrement())
+  agentId       Int
+  requirementId Int
+  url           String
+  status        documentStatus      @default(PENDING) // PENDING, APPROVED, REJECTED
+  rejectionNote String? // admin can explain why rejected
+  agent         Agent               @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  requirement   DocumentRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([agentId, requirementId])
+  @@index([agentId])
+}
+
+model subservice {
+  id          Int       @id @default(autoincrement())
+  name        String
+  price       Float?
+  description String?
+  categoryId  Int?
+  category    Category? @relation(fields: [categoryId], references: [id])
+
+  createdAt DateTime @default(now())
+  orders    Orders[]
+}
+
+// how do you track the user has approved and paid you or not ? 
+// connected directly to the orderGroup 
+
+model extraMaterial {
+  id             Int              @id @default(autoincrement())
+  name           String
+  quantity       Int
+  price          Float
+  description    String?
+  approvalStatus materialApproval @default(PENDING) // PENDING → user must approve/reject
+  paid           Boolean          @default(false)
+  paymentMethod  paymentMethod? // set by user at approval time (CASH or ONLINE)
+  groupId        Int
+  orderGroup     OrderGroup       @relation(fields: [groupId], references: [id])
+
+  addedByAgentId Int
+  addedByAgent   Agent @relation(fields: [addedByAgentId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([groupId])
+}
+
+// from address and to address 
+
+model OrderGroup {
+  id              Int               @id @default(autoincrement())
+  userId          Int
+  status          status            @default(PENDING)
+  paymentStatus   paymentStatus     @default(PENDING)
+  name            String?
+  totalPrice      Float?
+  description     String?
+  rating          Int? // 1-5 user rating after completion
+  createdAt       DateTime          @default(now())
+  servicetime     DateTime
+  orders          Orders[]
+  payments        Payment[]
+  extraMaterials  extraMaterial[]
+  assignedAgentId Int?
+  user            User              @relation(fields: [userId], references: [id])
+  agent           Agent?            @relation(fields: [assignedAgentId], references: [id])
+  userAddress     Int?
+  agentAddress    Int?
+  addressUser     Address?          @relation("orderGroupUserAddress", fields: [userAddress], references: [id])
+  addressAgent    Address?          @relation("orderGroupAgentAddress", fields: [agentAddress], references: [id])
+  assignments     OrderAssignment[]
+
+  @@index([userId, createdAt, id])
+  @@index([userId])
+  @@index([assignedAgentId])
+}
+
+model OrderAssignment {
+  id         Int              @id @default(autoincrement())
+  orderId    Int
+  agentId    Int
+  status     assignmentStatus @default(PENDING)
+  orderGroup OrderGroup       @relation(fields: [orderId], references: [id])
+  agent      Agent            @relation(fields: [agentId], references: [id])
+  createdAt  DateTime         @default(now())
+
+  @@unique([orderId, agentId])
+  @@index([orderId])
+  @@index([agentId])
+}
+
+model Orders {
+  id           Int         @id @default(autoincrement())
+  subserviceId Int
+  subservice   subservice  @relation(fields: [subserviceId], references: [id])
+  groupId      Int?
+  orderGroup   OrderGroup? @relation(fields: [groupId], references: [id])
+
+  serviceCharge Float
+
+  createdAt DateTime @default(now())
+
+  @@index([groupId])
+  @@index([subserviceId])
+}
+
+// how do you track for the payment for the extra material ? 
+// sptyro 2 6 
+// for extra material payment its there 
+model Payment {
+  id              Int           @id @default(autoincrement())
+  groupId         Int
+  orderGroup      OrderGroup    @relation(fields: [groupId], references: [id])
+  amount          Float
+  isExtraMaterial Boolean       @default(false)
+  method          paymentMethod
+  transactionId   String?
+  note            String?
+  createdAt       DateTime      @default(now())
+
+  @@index([groupId])
+}
+
+model notification {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  message     String
+  description String?
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+// ── Serviceable cities (admin managed) ─────────────────────────────────
+model City {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique // stored lowercase for matching
+  state     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+// ── Monthly agent settlement / payout tracking ─────────────────────────
+model MonthlySettlement {
+  id              Int       @id @default(autoincrement())
+  agentId         Int
+  agent           Agent     @relation(fields: [agentId], references: [id])
+  month           Int // 1-12
+  year            Int
+  totalEarnings   Float     @default(0) // gross amount for completed orders
+  serviceEarnings Float     @default(0) // only service charges (commission base)
+  extraEarnings   Float     @default(0) // extra materials (no commission)
+  commission      Float     @default(0) // platform 5 % cut on serviceEarnings only
+  netPayable      Float     @default(0) // totalEarnings - commission
+  codCollected    Float     @default(0) // cash agent already collected
+  onlineCollected Float     @default(0) // paid online (platform holds it)
+  amountToSend    Float     @default(0) // onlineCollected - commission  (what admin sends to agent)
+  carryOver       Float     @default(0) // if codCollected > netPayable → agent owes platform; carried to next month
+  previousCarry   Float     @default(0) // carry-over brought from previous month
+  settled         Boolean   @default(false)
+  settledAt       DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@unique([agentId, month, year])
+  @@index([agentId])
+}
