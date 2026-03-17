@@ -2,6 +2,14 @@ import { Router } from "express";
 import { prisma } from "../../db/index.ts";
 import { userMiddleware } from "../middleware/user.middleware.ts";
 const router = Router();
+
+const normalizeCityName = (value: string) =>
+  value
+    .toLowerCase()
+    .split(",")[0]
+    ?.replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim() || "";
 //
 // user can approve or reject a request from the plubmer / electrician
 // user can order
@@ -705,15 +713,26 @@ router.patch("/notifications/read-all", async (req, res) => {
 // Check if a city is serviceable
 router.get("/cities/check", async (req, res) => {
   try {
-    const cityName = (req.query.city as string)?.trim().toLowerCase();
+    const rawCityName = (req.query.city as string)?.trim();
+    const cityName = rawCityName ? normalizeCityName(rawCityName) : "";
     if (!cityName)
       return res.status(400).json({ error: "city query param is required" });
 
-    const city = await prisma.city.findFirst({
-      where: { name: { equals: cityName, mode: "insensitive" } },
+    const activeCities = await prisma.city.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, state: true, isActive: true },
     });
 
-    if (!city || !city.isActive) {
+    const city = activeCities.find((c) => {
+      const normalizedDbCity = normalizeCityName(c.name);
+      return (
+        normalizedDbCity === cityName ||
+        cityName.startsWith(`${normalizedDbCity} `) ||
+        cityName.endsWith(` ${normalizedDbCity}`)
+      );
+    });
+
+    if (!city) {
       return res.json({
         available: false,
         message: "Service is not available in your city yet",

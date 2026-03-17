@@ -1,13 +1,31 @@
 import { useEffect, useState } from "react";
 import api from "../../api";
+import { Link } from "react-router-dom";
 import { DollarSign, Users, CalendarDays, Package, AlertCircle } from "lucide-react";
+
+const activeStatuses = new Set(["PENDING", "ASSIGNED", "ON_THEWAY", "IN_PROGRESS"]);
+
+const statusColors: Record<string, string> = {
+  PENDING: "bg-yellow-100 text-yellow-800",
+  ASSIGNED: "bg-blue-100 text-blue-800",
+  ON_THEWAY: "bg-purple-100 text-purple-800",
+  IN_PROGRESS: "bg-orange-100 text-orange-800",
+};
 
 export default function AdminDashboard() {
   const [data, setData] = useState<any>(null);
+  const [ongoingOrders, setOngoingOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get("/admin/dashboard").then((r) => { setData(r.data); setLoading(false); }).catch(() => setLoading(false));
+    Promise.all([api.get("/admin/dashboard"), api.get("/admin/orders")])
+      .then(([dashboardRes, ordersRes]) => {
+        setData(dashboardRes.data);
+        const orders = ordersRes.data?.orders || [];
+        setOngoingOrders(orders.filter((o: any) => activeStatuses.has(o.status)));
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
   }, []);
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400" /></div>;
@@ -34,6 +52,44 @@ export default function AdminDashboard() {
             <p className="text-2xl font-bold text-gray-900">{s.value}</p>
           </div>
         ))}
+      </div>
+
+      <div className="mt-5 bg-white rounded-lg border border-gray-200">
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-900">Ongoing Orders</h2>
+          <Link to="/admin/orders" className="text-xs font-medium text-gray-600 hover:text-gray-900">
+            View all
+          </Link>
+        </div>
+
+        {ongoingOrders.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-8">No ongoing orders right now.</p>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {ongoingOrders.slice(0, 8).map((order) => (
+              <Link
+                key={order.id}
+                to="/admin/orders"
+                className="block px-4 py-3 hover:bg-gray-50 transition"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">#{order.id} {order.name || "Service Order"}</p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {order.addressUser?.address}, {order.addressUser?.city}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${statusColors[order.status] || "bg-gray-100 text-gray-600"}`}>
+                      {order.status?.replace("_", " ")}
+                    </span>
+                    <p className="text-xs font-semibold text-gray-900 mt-1">₹{order.totalPrice ?? 0}</p>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

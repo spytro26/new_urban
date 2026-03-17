@@ -21,6 +21,16 @@ const assignmentStatusColors: Record<string, string> = {
   DECLINED: "text-red-600 bg-red-50",
 };
 
+const getCategoryValue = (category: any): string | null => {
+  if (!category) return null;
+  if (typeof category === "string") return category;
+  if (typeof category === "object") {
+    if (typeof category.name === "string") return category.name;
+    if (typeof category.slug === "string") return category.slug;
+  }
+  return null;
+};
+
 export default function AdminOrders() {
   const [orders, setOrders] = useState<any[]>([]);
   const [agents, setAgents] = useState<any[]>([]);
@@ -112,7 +122,7 @@ export default function AdminOrders() {
   // Get the service category for an order (from its subservices)
   const getOrderCategory = (order: any): string | null => {
     const categories = (order.orders || [])
-      .map((o: any) => o.subservice?.category)
+      .map((o: any) => getCategoryValue(o.subservice?.category))
       .filter(Boolean);
     // Return the dominant category (usually all same)
     return categories[0] || null;
@@ -205,7 +215,7 @@ export default function AdminOrders() {
                         </span>
                         {orderCategory && (
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                            orderCategory === "PLUMBER" ? "bg-blue-50 text-blue-600" : "bg-amber-50 text-amber-600"
+                            orderCategory.toLowerCase() === "plumber" ? "bg-blue-50 text-blue-600" : "bg-amber-50 text-amber-600"
                           }`}>
                             {orderCategory}
                           </span>

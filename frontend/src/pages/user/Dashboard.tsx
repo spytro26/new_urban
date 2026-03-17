@@ -15,6 +15,17 @@ const statusColors: Record<string, string> = {
 
 const labelIcons: Record<string, typeof Home> = { Home, Work: Briefcase, Other: MoreHorizontal };
 
+const checkCityAvailable = async (city?: string | null) => {
+  const cityValue = city?.trim();
+  if (!cityValue) return false;
+  try {
+    const r = await api.get(`/users/cities/check?city=${encodeURIComponent(cityValue)}`);
+    return Boolean(r.data?.available);
+  } catch {
+    return false;
+  }
+};
+
 export default function UserHome() {
   const [step, setStep] = useState<"home" | "services" | "address" | "confirm">("home");
   const [categories, setCategories] = useState<any[]>([]);
@@ -56,17 +67,28 @@ export default function UserHome() {
       api.get("/users/orders"),
       api.get("/users/addresses"),
       api.get("/auth/categories/active"),
-    ]).then(([ordRes, addrRes, catRes]) => {
+    ]).then(async ([ordRes, addrRes, catRes]) => {
       setOrders(ordRes.data.orders);
       const addrs = addrRes.data.addresses || [];
       setAddresses(addrs);
       setCategories(catRes.data.categories || []);
       if (addrs.length > 0) {
         setSelectedAddressId(addrs[0].id);
-        const city = addrs[0].city;
-        if (city) {
-          api.get(`/users/cities/check?city=${encodeURIComponent(city)}`).then((r) => setCityOk(r.data.available));
+        const uniqueCities = [
+          ...new Set(
+            addrs
+              .map((a: any) => (typeof a.city === "string" ? a.city.trim() : ""))
+              .filter(Boolean),
+          ),
+        ] as string[];
+
+        if (uniqueCities.length === 0) {
+          setCityOk(null);
+          return;
         }
+
+        const checks = await Promise.all(uniqueCities.map((city) => checkCityAvailable(city)));
+        setCityOk(checks.some(Boolean));
       }
     });
   }, []);

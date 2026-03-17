@@ -47,13 +47,14 @@ const globalLimiter = rateLimit({
   message: { error: "Too many requests, slow down. Try again in a minute." },
 });
 
-// Auth: strict — 10 login/register attempts per 15 min per IP
+// Auth: allow normal retries, but still slow down repeated abuse per IP
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
+  windowMs: 5 * 60 * 1000,
+  max: 25,
+  skipSuccessfulRequests: true,
   standardHeaders: "draft-7",
   legacyHeaders: false,
-  message: { error: "Too many auth attempts. Try again after 15 minutes." },
+  message: { error: "Too many auth attempts. Try again after 5 minutes." },
 });
 
 // Uploads: 20 per 10 min per IP
@@ -78,7 +79,7 @@ app.use("/api/users", userRouter);
 app.use("/api/agents", agentRouter);
 app.use("/api/admin", adminRouter);
 
-app.listen(env.PORT, () => {
+app.listen(3002, () => {
   console.log(`Server running on port ${env.PORT}`);
 });
 
