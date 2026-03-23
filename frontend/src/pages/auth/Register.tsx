@@ -76,7 +76,7 @@ export default function Register() {
   const requiredDocs = uniqueDocReqs.filter((r) => r.isRequired);
 
   const canProceedStep = (s: number): boolean => {
-    if (s === 0) return !!form.name && !!form.email && !!form.password && !!form.address && !!form.pin;
+    if (s === 0) return !!form.name && !!form.email && !!form.password && !!form.address && !!form.pin && !!form.city;
     if (s === 1) return selectedCategoryIds.length > 0;
     if (s === 2) return requiredDocs.every((r) => docFiles[r.id]);
     return true;

@@ -25,6 +25,7 @@ export default function Navbar() {
     if (role === "AGENT") return [
       { label: "Dashboard", to: "/agent/dashboard" },
       { label: "My Jobs", to: "/agent/jobs" },
+      { label: "Notifications", to: "/agent/notifications" },
       { label: "Earnings", to: "/agent/earnings" },
       { label: "Profile", to: "/agent/profile" },
     ];

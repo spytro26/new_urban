@@ -3,12 +3,22 @@ import api from "../../api";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Edit, X, Check, FileText } from "lucide-react";
 
+const STANDARD_DOCUMENTS = [
+  { name: "Aadhar Card", description: "Government identity proof", isRequired: true },
+  { name: "PAN Card", description: "PAN details for tax verification", isRequired: true },
+  { name: "Address Proof", description: "Utility bill, rent agreement, or similar", isRequired: true },
+  { name: "Selfie Photo", description: "Recent passport-style photo", isRequired: false },
+  { name: "Police Verification", description: "Police verification or background check", isRequired: false },
+  { name: "Trade Certificate", description: "Relevant skill or trade certificate", isRequired: false },
+] as const;
+
 export default function AdminCategories() {
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ name: "", slug: "", description: "" });
   const [docReqs, setDocReqs] = useState<{ name: string; description: string; isRequired: boolean }[]>([]);
+  const [newReqForm, setNewReqForm] = useState({ name: "", description: "", isRequired: true });
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({ name: "", slug: "", description: "" });
   const [addReqForm, setAddReqForm] = useState({ name: "", description: "", isRequired: true, categoryId: null as number | null });
@@ -18,6 +28,28 @@ export default function AdminCategories() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const normalizeReqName = (name: string) => name.trim().toLowerCase();
+
+  const addDocReqToNewCategory = (req: { name: string; description?: string; isRequired: boolean }) => {
+    const cleanedName = req.name.trim();
+    if (!cleanedName) {
+      toast.error("Requirement name required");
+      return;
+    }
+
+    const exists = docReqs.some((r) => normalizeReqName(r.name) === normalizeReqName(cleanedName));
+    if (exists) {
+      toast.error("This document requirement is already added");
+      return;
+    }
+
+    setDocReqs((prev) => [...prev, {
+      name: cleanedName,
+      description: req.description?.trim() || "",
+      isRequired: req.isRequired,
+    }]);
+  };
 
   const addCategory = async () => {
     if (!form.name) { toast.error("Name required"); return; }
@@ -32,6 +64,7 @@ export default function AdminCategories() {
       setShowAdd(false);
       setForm({ name: "", slug: "", description: "" });
       setDocReqs([]);
+      setNewReqForm({ name: "", description: "", isRequired: true });
       load();
     } catch (err: any) { toast.error(err.response?.data?.error || "Failed"); }
   };
@@ -49,7 +82,10 @@ export default function AdminCategories() {
     } catch { toast.error("Failed"); }
   };
 
-  const deleteCategory = async (id: number) => {
+  const deleteCategory = async (id: number, name: string) => {
+    const confirmed = window.confirm(`Delete category \"${name}\"? This action cannot be undone.`);
+    if (!confirmed) return;
+
     try {
       await api.delete(`/admin/categories/${id}`);
       toast.success("Deleted");
@@ -105,20 +141,74 @@ export default function AdminCategories() {
           <div className="border-t border-gray-100 pt-3">
             <p className="text-xs font-semibold text-gray-600 mb-2">Document Requirements</p>
             {docReqs.map((r, i) => (
-              <div key={i} className="flex items-center gap-2 mb-1.5">
-                <span className="text-xs text-gray-700 flex-1">{r.name} {r.isRequired && <span className="text-red-500">*</span>}</span>
+              <div key={i} className="flex items-start gap-2 mb-1.5">
+                <div className="flex-1">
+                  <span className="text-xs text-gray-700">{r.name} {r.isRequired && <span className="text-red-500">*</span>}</span>
+                  {r.description && <p className="text-[10px] text-gray-400">{r.description}</p>}
+                </div>
                 <button onClick={() => setDocReqs(docReqs.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-600"><X size={12} /></button>
               </div>
             ))}
-            <div className="flex gap-2 items-center">
-              <input placeholder="Requirement name" className="flex-1 px-2 py-1.5 border rounded-md text-xs outline-none"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && (e.target as HTMLInputElement).value) {
-                    setDocReqs([...docReqs, { name: (e.target as HTMLInputElement).value, description: "", isRequired: true }]);
-                    (e.target as HTMLInputElement).value = "";
-                  }
-                }} />
-              <span className="text-[10px] text-gray-400">Press Enter</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+              <input
+                placeholder="Requirement name"
+                className="px-2 py-1.5 border rounded-md text-xs outline-none"
+                value={newReqForm.name}
+                onChange={(e) => setNewReqForm({ ...newReqForm, name: e.target.value })}
+              />
+              <input
+                placeholder="Description (optional)"
+                className="px-2 py-1.5 border rounded-md text-xs outline-none"
+                value={newReqForm.description}
+                onChange={(e) => setNewReqForm({ ...newReqForm, description: e.target.value })}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <label className="flex items-center gap-1 text-xs text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={newReqForm.isRequired}
+                  onChange={(e) => setNewReqForm({ ...newReqForm, isRequired: e.target.checked })}
+                  className="rounded"
+                />
+                Required
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  addDocReqToNewCategory(newReqForm);
+                  setNewReqForm({ name: "", description: "", isRequired: true });
+                }}
+                className="px-3 py-1 bg-gray-900 text-white rounded-full text-[10px] font-semibold hover:bg-gray-800 active:scale-[0.97] transition-all"
+              >
+                Add Requirement
+              </button>
+            </div>
+
+            <div className="mt-2">
+              <p className="text-[10px] text-gray-500 mb-1">Quick add standard documents:</p>
+              <div className="flex flex-wrap gap-1">
+                {STANDARD_DOCUMENTS.map((preset) => {
+                  const exists = docReqs.some((r) => normalizeReqName(r.name) === normalizeReqName(preset.name));
+                  return (
+                    <button
+                      key={preset.name}
+                      type="button"
+                      disabled={exists}
+                      onClick={() =>
+                        addDocReqToNewCategory({
+                          name: preset.name,
+                          description: preset.description,
+                          isRequired: newReqForm.isRequired,
+                        })
+                      }
+                      className="px-2 py-1 text-[10px] rounded-full border border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {preset.name}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
@@ -168,7 +258,7 @@ export default function AdminCategories() {
                     <div className="flex gap-0.5 shrink-0">
                       <button onClick={() => { setEditId(cat.id); setEditForm({ name: cat.name, slug: cat.slug, description: cat.description || "" }); }}
                         className="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50"><Edit size={14} /></button>
-                      <button onClick={() => deleteCategory(cat.id)}
+                      <button onClick={() => deleteCategory(cat.id, cat.name)}
                         className="p-1.5 rounded text-gray-400 hover:text-red-600 hover:bg-red-50"><Trash2 size={14} /></button>
                     </div>
                   </div>
@@ -198,6 +288,29 @@ export default function AdminCategories() {
                     {/* Add requirement to existing category */}
                     {addReqForm.categoryId === cat.id ? (
                       <div className="mt-2 space-y-1.5">
+                        <div>
+                          <p className="text-[10px] text-gray-500 mb-1">Quick add standard documents:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {STANDARD_DOCUMENTS.map((preset) => (
+                              <button
+                                key={`${cat.id}-${preset.name}`}
+                                type="button"
+                                onClick={() =>
+                                  setAddReqForm((prev) => ({
+                                    ...prev,
+                                    categoryId: cat.id,
+                                    name: preset.name,
+                                    description: preset.description,
+                                  }))
+                                }
+                                className="px-2 py-1 text-[10px] rounded-full border border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100"
+                              >
+                                {preset.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
                         <input placeholder="Requirement name" value={addReqForm.name} onChange={(e) => setAddReqForm({ ...addReqForm, name: e.target.value })}
                           className="w-full px-2 py-1.5 border rounded-md text-xs outline-none focus:ring-1 focus:ring-gray-400" />
                         <input placeholder="Description (optional)" value={addReqForm.description} onChange={(e) => setAddReqForm({ ...addReqForm, description: e.target.value })}
@@ -213,7 +326,7 @@ export default function AdminCategories() {
                         </div>
                       </div>
                     ) : (
-                      <button onClick={() => setAddReqForm({ ...addReqForm, categoryId: cat.id })}
+                      <button onClick={() => setAddReqForm({ name: "", description: "", isRequired: true, categoryId: cat.id })}
                         className="mt-2 flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-900 font-medium transition">
                         <Plus size={10} /> Add Requirement
                       </button>

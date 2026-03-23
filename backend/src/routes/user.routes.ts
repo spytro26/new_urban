@@ -10,6 +10,12 @@ const normalizeCityName = (value: string) =>
     ?.replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim() || "";
+
+const normalizeStoredCity = (value?: string | null) => {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return normalized || null;
+};
 //
 // user can approve or reject a request from the plubmer / electrician
 // user can order
@@ -464,7 +470,7 @@ router.put("/profile", async (req, res) => {
             userId,
             address,
             pin,
-            ...(city && { city }),
+            ...(city && { city: normalizeStoredCity(city) }),
             label: "Home",
             isUser: true,
           },
@@ -475,7 +481,7 @@ router.put("/profile", async (req, res) => {
           data: {
             ...(address && { address }),
             ...(pin && { pin }),
-            ...(city && { city }),
+            ...(city && { city: normalizeStoredCity(city) }),
           },
         });
       }
@@ -549,7 +555,7 @@ router.post("/addresses", async (req, res) => {
         userId,
         address,
         pin,
-        city: city ?? null,
+        city: normalizeStoredCity(city),
         label: label || "Other",
         isUser: true,
       },
@@ -586,7 +592,7 @@ router.put("/addresses/:addressId", async (req, res) => {
       data: {
         ...(address && { address }),
         ...(pin && { pin }),
-        ...(city !== undefined && { city: city || null }),
+        ...(city !== undefined && { city: normalizeStoredCity(city) }),
         ...(label && { label }),
       },
     });

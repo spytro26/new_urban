@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../../db/index.ts";
 import { adminMiddleware } from "../middleware/admin.middleware.ts";
+import { resetAndSeedMinimal } from "../utils/reset-and-seed-minimal.ts";
 
 const router = Router();
 router.use(adminMiddleware);
@@ -40,6 +41,29 @@ router.get("/dashboard", async (_req, res) => {
       bookingsToday,
       totalOrders,
       unassignedOrders,
+    });
+  } catch {
+    res.status(500).json({ error: "Something went wrong" });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+//  DEV RESET + MINIMAL SEED
+// ═══════════════════════════════════════════════════════════════════════
+
+router.post("/dev/reset-minimal", async (req, res) => {
+  try {
+    const { confirm } = req.body as { confirm?: string };
+    if (confirm !== "RESET_DB") {
+      return res.status(400).json({
+        error: 'confirmation required. send { "confirm": "RESET_DB" }',
+      });
+    }
+
+    const result = await resetAndSeedMinimal(prisma);
+    res.json({
+      message: "Database reset complete",
+      ...result,
     });
   } catch {
     res.status(500).json({ error: "Something went wrong" });
@@ -141,6 +165,23 @@ router.post("/categories", async (req, res) => {
     };
     if (!name) return res.status(400).json({ error: "name is required" });
 
+    const normalizedReqNames = new Set<string>();
+    for (const dr of documentRequirements ?? []) {
+      const reqName = dr.name?.trim();
+      if (!reqName) {
+        return res
+          .status(400)
+          .json({ error: "requirement name cannot be empty" });
+      }
+      const key = reqName.toLowerCase();
+      if (normalizedReqNames.has(key)) {
+        return res
+          .status(409)
+          .json({ error: `duplicate requirement: ${reqName}` });
+      }
+      normalizedReqNames.add(key);
+    }
+
     const slug = name.trim().toLowerCase().replace(/\s+/g, "-");
 
     const category = await prisma.category.create({
@@ -151,7 +192,7 @@ router.post("/categories", async (req, res) => {
         ...(documentRequirements?.length && {
           documentRequirements: {
             create: documentRequirements.map((dr) => ({
-              name: dr.name,
+              name: dr.name.trim(),
               description: dr.description ?? null,
               isRequired: dr.isRequired ?? true,
             })),
@@ -225,9 +266,21 @@ router.post("/categories/:categoryId/requirements", async (req, res) => {
     };
     if (!name) return res.status(400).json({ error: "name is required" });
 
+    const existingSameName = await prisma.documentRequirement.findFirst({
+      where: {
+        categoryId,
+        name: { equals: name.trim(), mode: "insensitive" },
+      },
+      select: { id: true },
+    });
+    if (existingSameName)
+      return res.status(409).json({
+        error: "requirement with this name already exists in category",
+      });
+
     const req2 = await prisma.documentRequirement.create({
       data: {
-        name,
+        name: name.trim(),
         description: description ?? null,
         isRequired: isRequired ?? true,
         categoryId,
@@ -261,10 +314,23 @@ router.patch(
       if (isNaN(agentId) || isNaN(categoryId))
         return res.status(400).json({ error: "invalid ids" });
 
-      const { approve, rejectionNote } = req.body as {
+      const { approve, action, rejectionNote } = req.body as {
         approve?: boolean;
+        action?: "approve" | "reject";
         rejectionNote?: string;
       };
+
+      // Backward compatible parsing:
+      // - preferred payload from frontend: { action: "approve" | "reject" }
+      // - legacy payload: { approve: boolean }
+      const shouldApprove =
+        action === "approve"
+          ? true
+          : action === "reject"
+            ? false
+            : approve !== false;
+
+      const cleanedRejectionNote = rejectionNote?.trim();
 
       const ac = await prisma.agentCategory.findUnique({
         where: { agentId_categoryId: { agentId, categoryId } },
@@ -275,9 +341,10 @@ router.patch(
       const updated = await prisma.agentCategory.update({
         where: { id: ac.id },
         data: {
-          isVerified: approve !== false,
-          rejectionNote:
-            approve === false ? (rejectionNote ?? "Rejected by admin") : null,
+          isVerified: shouldApprove,
+          rejectionNote: shouldApprove
+            ? null
+            : cleanedRejectionNote || "Rejected by admin",
         },
         include: { category: { select: { name: true } } },
       });
@@ -574,8 +641,16 @@ router.get("/agents", async (req, res) => {
           },
         },
         documents: {
+          orderBy: { updatedAt: "desc" },
           include: {
-            requirement: { select: { id: true, name: true, categoryId: true } },
+            requirement: {
+              select: {
+                id: true,
+                name: true,
+                categoryId: true,
+                category: { select: { id: true, name: true, slug: true } },
+              },
+            },
           },
         },
         _count: { select: { orders: true } },

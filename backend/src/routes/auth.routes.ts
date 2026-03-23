@@ -62,14 +62,7 @@ router.post("/admin/register", registerAdmin);
 router.post("/admin/login", loginAdmin);
 
 // Agent routes
-router.post(
-  "/agent/register",
-  upload.fields([
-    { name: "id_proof", maxCount: 1 },
-    { name: "address_proof", maxCount: 1 },
-  ]),
-  registerAgent,
-);
+router.post("/agent/register", upload.any(), registerAgent);
 router.post("/agent/login", loginAgent);
 
 export default router;

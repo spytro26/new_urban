@@ -175,6 +175,7 @@ model AgentDocument {
   requirementId Int
   url           String
   status        documentStatus      @default(PENDING) // PENDING, APPROVED, REJECTED
+  resubmitCount Int                 @default(0) // increments on each re-upload after rejection
   rejectionNote String? // admin can explain why rejected
   agent         Agent               @relation(fields: [agentId], references: [id], onDelete: Cascade)
   requirement   DocumentRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)

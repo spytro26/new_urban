@@ -18,6 +18,8 @@ export default function AgentDashboard() {
   const [activeJobs, setActiveJobs] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
   const [categories, setCategories] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -41,7 +43,16 @@ export default function AgentDashboard() {
       api.get("/agents/jobs?status=ON_THEWAY"),
       api.get("/agents/jobs?status=IN_PROGRESS"),
       api.get("/agents/profile"),
-    ]).then(([p, ot, ip, pr]) => { setPendingJobs(p.data.jobs); setActiveJobs([...ot.data.jobs, ...ip.data.jobs]); setProfile(pr.data.agent); }).catch(() => {}).finally(() => { setRefreshing(false); startCooldown(); });
+      api.get("/agents/categories"),
+      api.get("/agents/notifications"),
+    ]).then(([p, ot, ip, pr, cats, notifs]) => {
+      setPendingJobs(p.data.jobs);
+      setActiveJobs([...ot.data.jobs, ...ip.data.jobs]);
+      setProfile(pr.data.agent);
+      setCategories(cats.data.categories || []);
+      setDocuments(cats.data.documents || []);
+      setNotifications((notifs.data.notifications || []).slice(0, 4));
+    }).catch(() => {}).finally(() => { setRefreshing(false); startCooldown(); });
   };
 
   const load = () => {
@@ -51,11 +62,14 @@ export default function AgentDashboard() {
       api.get("/agents/jobs?status=IN_PROGRESS"),
       api.get("/agents/profile"),
       api.get("/agents/categories"),
-    ]).then(([p, ot, ip, pr, cats]) => {
+      api.get("/agents/notifications"),
+    ]).then(([p, ot, ip, pr, cats, notifs]) => {
       setPendingJobs(p.data.jobs);
       setActiveJobs([...ot.data.jobs, ...ip.data.jobs]);
       setProfile(pr.data.agent);
       setCategories(cats.data.categories || []);
+      setDocuments(cats.data.documents || []);
+      setNotifications((notifs.data.notifications || []).slice(0, 4));
       setLoading(false);
     }).catch(() => setLoading(false));
   };
@@ -127,9 +141,10 @@ export default function AgentDashboard() {
     const verifiedCats = categories.filter((c: any) => c.isVerified);
 
     // Collect all doc requirements with status from the documents
-    const allDocs = categories.flatMap((c: any) =>
-      (c.documents || []).map((d: any) => ({ ...d, categoryName: c.category?.name }))
-    );
+    const allDocs = documents.map((d: any) => ({
+      ...d,
+      categoryName: d.requirement?.category?.name,
+    }));
 
     return (
       <div className="px-4 lg:px-6 py-4">
@@ -202,6 +217,23 @@ export default function AgentDashboard() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {notifications.length > 0 && (
+            <div className="bg-white border border-gray-200 rounded-lg p-4 mb-3">
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">Latest Notifications</h3>
+              <div className="space-y-2">
+                {notifications.map((n: any) => (
+                  <div key={n.id} className="bg-gray-50 rounded-lg p-2.5">
+                    <p className="text-xs font-medium text-gray-800">{n.message}</p>
+                    {n.description && <p className="text-[11px] text-gray-500 mt-0.5">{n.description}</p>}
+                  </div>
+                ))}
+              </div>
+              <Link to="/agent/notifications" className="inline-block mt-2 text-xs text-gray-900 font-semibold hover:underline">
+                View all notifications
+              </Link>
             </div>
           )}
 

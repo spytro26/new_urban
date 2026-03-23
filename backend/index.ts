@@ -79,7 +79,7 @@ app.use("/api/users", userRouter);
 app.use("/api/agents", agentRouter);
 app.use("/api/admin", adminRouter);
 
-app.listen(3002, () => {
+app.listen(3000, () => {
   console.log(`Server running on port ${env.PORT}`);
 });
 

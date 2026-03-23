@@ -400,7 +400,29 @@ router.get("/profile", async (req, res) => {
 
     const agent = await prisma.agent.findUnique({
       where: { id: agentId },
-      include: { address: true, bankDetails: true },
+      include: {
+        address: true,
+        bankDetails: true,
+        categories: {
+          include: {
+            category: { select: { id: true, name: true, slug: true } },
+          },
+          orderBy: { id: "asc" },
+        },
+        documents: {
+          include: {
+            requirement: {
+              select: {
+                id: true,
+                name: true,
+                categoryId: true,
+                category: { select: { id: true, name: true, slug: true } },
+              },
+            },
+          },
+          orderBy: { updatedAt: "desc" },
+        },
+      },
     });
     if (!agent) return res.status(404).json({ error: "agent not found" });
 
@@ -574,7 +596,7 @@ router.get("/earnings", async (req, res) => {
 router.get("/categories", async (req, res) => {
   try {
     const agentId = req.user!.id;
-    const categories = await prisma.agentCategory.findMany({
+    const categoriesRaw = await prisma.agentCategory.findMany({
       where: { agentId },
       include: {
         category: {
@@ -593,17 +615,149 @@ router.get("/categories", async (req, res) => {
           },
         },
       },
+      orderBy: { id: "asc" },
     });
 
     // Also include agent documents for each category
     const documents = await prisma.agentDocument.findMany({
       where: { agentId },
       include: {
-        requirement: { select: { id: true, name: true, categoryId: true } },
+        requirement: {
+          select: {
+            id: true,
+            name: true,
+            categoryId: true,
+            category: { select: { id: true, name: true, slug: true } },
+          },
+        },
       },
+      orderBy: { updatedAt: "desc" },
     });
 
+    const categories = categoriesRaw.map((ac) => ({
+      ...ac,
+      documents: documents.filter(
+        (d) => d.requirement.categoryId === ac.categoryId,
+      ),
+    }));
+
     res.json({ categories, documents });
+  } catch {
+    res.status(500).json({ error: "Something went wrong" });
+  }
+});
+
+// ─── 11b. Agent notifications (synthetic feed from events) ───────────
+router.get("/notifications", async (req, res) => {
+  try {
+    const agentId = req.user!.id;
+
+    const [pendingAssignments, decidedMaterials, decidedDocs, decidedCats] =
+      await Promise.all([
+        prisma.orderAssignment.findMany({
+          where: { agentId, status: "PENDING" },
+          include: {
+            orderGroup: {
+              select: {
+                id: true,
+                totalPrice: true,
+                servicetime: true,
+                createdAt: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.extraMaterial.findMany({
+          where: {
+            addedByAgentId: agentId,
+            approvalStatus: { in: ["APPROVED", "REJECTED"] },
+          },
+          include: {
+            orderGroup: {
+              select: {
+                id: true,
+                user: { select: { email: true } },
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.agentDocument.findMany({
+          where: {
+            agentId,
+            status: { in: ["APPROVED", "REJECTED"] },
+          },
+          include: {
+            requirement: {
+              select: {
+                id: true,
+                name: true,
+                category: { select: { id: true, name: true } },
+              },
+            },
+          },
+          orderBy: { updatedAt: "desc" },
+        }),
+        prisma.agentCategory.findMany({
+          where: {
+            agentId,
+            OR: [{ isVerified: true }, { rejectionNote: { not: null } }],
+          },
+          include: {
+            category: { select: { id: true, name: true, slug: true } },
+          },
+          orderBy: { id: "asc" },
+        }),
+      ]);
+
+    const notifications = [
+      ...pendingAssignments.map((a) => ({
+        id: `assignment-${a.id}`,
+        kind: "TASK_ASSIGNED",
+        message: `New task assigned: Order #${a.orderId}`,
+        description: `Order value ₹${a.orderGroup.totalPrice ?? 0}. Please accept or decline.`,
+        createdAt: a.createdAt,
+      })),
+      ...decidedMaterials.map((m) => ({
+        id: `material-${m.id}-${m.approvalStatus}`,
+        kind: "EXTRA_MATERIAL_DECISION",
+        message:
+          m.approvalStatus === "APPROVED"
+            ? `User approved extra material: ${m.name}`
+            : `User rejected extra material: ${m.name}`,
+        description: `Order #${m.groupId} · ${m.quantity} × ₹${m.price}${m.orderGroup?.user?.email ? ` · ${m.orderGroup.user.email}` : ""}`,
+        createdAt: m.createdAt,
+      })),
+      ...decidedDocs.map((d) => ({
+        id: `doc-${d.id}-${d.status}-${d.updatedAt.getTime()}`,
+        kind: "DOCUMENT_REVIEW",
+        message:
+          d.status === "APPROVED"
+            ? `${d.requirement.category.name}: ${d.requirement.name} approved`
+            : `${d.requirement.category.name}: ${d.requirement.name} rejected`,
+        description:
+          d.status === "REJECTED"
+            ? d.rejectionNote || "Rejected by admin"
+            : "Your document has been approved.",
+        createdAt: d.updatedAt,
+      })),
+      ...decidedCats.map((c) => ({
+        id: `category-${c.id}-${c.isVerified ? "approved" : "rejected"}`,
+        kind: "CATEGORY_REVIEW",
+        message: c.isVerified
+          ? `Category approved: ${c.category.name}`
+          : `Category rejected: ${c.category.name}`,
+        description: c.isVerified
+          ? "You can accept jobs for this category."
+          : c.rejectionNote || "Rejected by admin",
+        createdAt: c.createdAt,
+      })),
+    ]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 100);
+
+    res.json({ notifications });
   } catch {
     res.status(500).json({ error: "Something went wrong" });
   }
@@ -640,6 +794,52 @@ router.post(
           .status(403)
           .json({ error: "you are not registered for this category" });
 
+      // Reuse this upload for all requirements with the same name
+      // across the agent's selected categories (case-insensitive).
+      const sameNameRequirements = await prisma.documentRequirement.findMany({
+        where: {
+          name: { equals: requirement.name, mode: "insensitive" },
+          category: {
+            agentCategories: {
+              some: { agentId },
+            },
+          },
+        },
+        select: { id: true },
+      });
+
+      const targetRequirementIds =
+        sameNameRequirements.length > 0
+          ? sameNameRequirements.map((r) => r.id)
+          : [requirementId];
+
+      // Check existing docs for retry limit and prepare per-requirement update logic
+      const existingDocs = await prisma.agentDocument.findMany({
+        where: {
+          agentId,
+          requirementId: { in: targetRequirementIds },
+        },
+      });
+
+      const existingByRequirement = new Map(
+        existingDocs.map((d) => [d.requirementId, d]),
+      );
+
+      const maxRetry = 5;
+      const lockedRequirementIds = targetRequirementIds.filter((rid) => {
+        const doc = existingByRequirement.get(rid);
+        return (
+          !!doc && doc.status === "REJECTED" && doc.resubmitCount >= maxRetry
+        );
+      });
+
+      if (lockedRequirementIds.length > 0) {
+        return res.status(400).json({
+          error: `Maximum re-upload limit reached (${maxRetry}) for one or more rejected documents`,
+          lockedRequirementIds,
+        });
+      }
+
       // Upload to Cloudinary
       const agent = await prisma.agent.findUnique({ where: { id: agentId } });
       const ts = Date.now();
@@ -649,14 +849,30 @@ router.post(
         `agent_${(agent?.email ?? "unknown").replace(/[^a-z0-9]/gi, "_")}_doc_${requirementId}_${ts}`,
       );
 
-      // Upsert the document (allows retry for rejected docs)
-      const doc = await prisma.agentDocument.upsert({
-        where: { agentId_requirementId: { agentId, requirementId } },
-        update: { url, status: "PENDING", rejectionNote: null },
-        create: { agentId, requirementId, url },
-      });
+      // Upsert for all same-name requirements (single upload, reused docs)
+      const docs = await prisma.$transaction(
+        targetRequirementIds.map((rid) =>
+          prisma.agentDocument.upsert({
+            where: { agentId_requirementId: { agentId, requirementId: rid } },
+            update: {
+              url,
+              status: "PENDING",
+              rejectionNote: null,
+              resubmitCount:
+                existingByRequirement.get(rid)?.status === "REJECTED"
+                  ? (existingByRequirement.get(rid)?.resubmitCount ?? 0) + 1
+                  : (existingByRequirement.get(rid)?.resubmitCount ?? 0),
+            },
+            create: { agentId, requirementId: rid, url },
+          }),
+        ),
+      );
 
-      res.status(201).json({ document: doc });
+      res.status(201).json({
+        message: "Document uploaded",
+        appliedToRequirementIds: targetRequirementIds,
+        documents: docs,
+      });
     } catch {
       res.status(500).json({ error: "Something went wrong" });
     }

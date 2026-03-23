@@ -76,11 +76,25 @@ export async function registerAgent(
   }
 
   // Get uploaded files
-  const files = req.files as
-    | { [fieldname: string]: Express.Multer.File[] }
-    | undefined;
-  const idProofFile = files?.["id_proof"]?.[0];
-  const addressProofFile = files?.["address_proof"]?.[0];
+  const files = req.files as Express.Multer.File[] | undefined;
+
+  // Process document files with doc_* field names
+  // - legacy: doc_id_proof / doc_address_proof
+  // - dynamic requirements: doc_<requirementId>
+  const docFiles = new Map<string, Express.Multer.File>();
+  const docByRequirementId = new Map<number, Express.Multer.File>();
+  if (files) {
+    files.forEach((file) => {
+      if (file.fieldname.startsWith("doc_")) {
+        docFiles.set(file.fieldname, file);
+
+        const requirementId = Number(file.fieldname.replace(/^doc_/, ""));
+        if (!Number.isNaN(requirementId)) {
+          docByRequirementId.set(requirementId, file);
+        }
+      }
+    });
+  }
 
   if (!email || !password || !name || !address || !pin) {
     res.status(400).json({
@@ -110,23 +124,27 @@ export async function registerAgent(
   const hashedPassword = await bcrypt.hash(password, 10);
 
   // Upload proof images to Cloudinary (if provided)
-  let idProofUrl: string | undefined;
-  let addressProofUrl: string | undefined;
+  const docUrls = new Map<string, string>();
+  const docUrlsByRequirementId = new Map<number, string>();
   const timestamp = Date.now();
 
-  if (idProofFile) {
-    idProofUrl = await uploadToCloudinary(
-      idProofFile.buffer,
+  for (const [fieldname, file] of docFiles) {
+    const docUrl = await uploadToCloudinary(
+      file.buffer,
       "urban/agents/documents",
-      `agent_${email.replace(/[^a-z0-9]/gi, "_")}_id_proof_${timestamp}`,
+      `agent_${email.replace(/[^a-z0-9]/gi, "_")}_${fieldname}_${timestamp}`,
     );
+    docUrls.set(fieldname, docUrl);
   }
-  if (addressProofFile) {
-    addressProofUrl = await uploadToCloudinary(
-      addressProofFile.buffer,
+
+  // Upload requirement docs (doc_<requirementId>)
+  for (const [requirementId, file] of docByRequirementId) {
+    const docUrl = await uploadToCloudinary(
+      file.buffer,
       "urban/agents/documents",
-      `agent_${email.replace(/[^a-z0-9]/gi, "_")}_address_proof_${timestamp}`,
+      `agent_${email.replace(/[^a-z0-9]/gi, "_")}_requirement_${requirementId}_${timestamp}`,
     );
+    docUrlsByRequirementId.set(requirementId, docUrl);
   }
 
   // If no categoryIds provided, try to map the legacy `type` to a category
@@ -144,8 +162,12 @@ export async function registerAgent(
       name,
       type: (type ?? categoryIds.length > 0) ? (type ?? "multi") : "general",
       ...(profilepic && { profilepic }),
-      ...(idProofUrl && { id_proof: idProofUrl }),
-      ...(addressProofUrl && { address_proof: addressProofUrl }),
+      ...(docUrls.get("doc_id_proof") && {
+        id_proof: docUrls.get("doc_id_proof"),
+      }),
+      ...(docUrls.get("doc_address_proof") && {
+        address_proof: docUrls.get("doc_address_proof"),
+      }),
       address: {
         create: {
           address,
@@ -180,6 +202,61 @@ export async function registerAgent(
       },
     },
   });
+
+  // Save dynamic requirement documents so admin can review them.
+  // Also replicate one uploaded document across same-name requirements
+  // in the agent's selected categories.
+  if (docUrlsByRequirementId.size > 0 && categoryIds.length > 0) {
+    const uploadedRequirementIds = Array.from(docUrlsByRequirementId.keys());
+
+    const uploadedRequirements = await prisma.documentRequirement.findMany({
+      where: { id: { in: uploadedRequirementIds } },
+      select: { id: true, name: true },
+    });
+
+    const uploadedByName = new Map<string, { id: number; url: string }>();
+    for (const req of uploadedRequirements) {
+      const key = req.name.trim().toLowerCase();
+      const url = docUrlsByRequirementId.get(req.id);
+      if (url && !uploadedByName.has(key)) {
+        uploadedByName.set(key, { id: req.id, url });
+      }
+    }
+
+    const categoryRequirements = await prisma.documentRequirement.findMany({
+      where: { categoryId: { in: categoryIds } },
+      select: { id: true, name: true },
+    });
+
+    const docsToCreate = new Map<number, string>();
+
+    // Always include directly uploaded requirement ids
+    for (const [rid, url] of docUrlsByRequirementId) {
+      docsToCreate.set(rid, url);
+    }
+
+    // Reuse docs for same requirement name across selected categories
+    for (const req of categoryRequirements) {
+      const key = req.name.trim().toLowerCase();
+      const uploaded = uploadedByName.get(key);
+      if (uploaded && !docsToCreate.has(req.id)) {
+        docsToCreate.set(req.id, uploaded.url);
+      }
+    }
+
+    if (docsToCreate.size > 0) {
+      await prisma.agentDocument.createMany({
+        data: Array.from(docsToCreate.entries()).map(
+          ([requirementId, url]) => ({
+            agentId: agent.id,
+            requirementId,
+            url,
+          }),
+        ),
+        skipDuplicates: true,
+      });
+    }
+  }
 
   const primaryAddress = agent.address[0] ?? null;
 

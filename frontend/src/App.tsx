@@ -18,6 +18,7 @@ import AgentJobs from "./pages/agent/Jobs";
 import AgentJobDetail from "./pages/agent/JobDetail";
 import AgentProfile from "./pages/agent/Profile";
 import AgentEarnings from "./pages/agent/Earnings";
+import AgentNotifications from "./pages/agent/Notifications";
 
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminCities from "./pages/admin/Cities";
@@ -70,6 +71,7 @@ export default function App() {
         <Route path="/agent/jobs/:jobId" element={<ProtectedRoute role="AGENT"><AppLayout><AgentJobDetail /></AppLayout></ProtectedRoute>} />
         <Route path="/agent/profile" element={<ProtectedRoute role="AGENT"><AppLayout><AgentProfile /></AppLayout></ProtectedRoute>} />
         <Route path="/agent/earnings" element={<ProtectedRoute role="AGENT"><AppLayout><AgentEarnings /></AppLayout></ProtectedRoute>} />
+        <Route path="/agent/notifications" element={<ProtectedRoute role="AGENT"><AppLayout><AgentNotifications /></AppLayout></ProtectedRoute>} />
 
         {/* Admin routes */}
         <Route path="/admin/dashboard" element={<ProtectedRoute role="ADMIN"><AppLayout><AdminDashboard /></AppLayout></ProtectedRoute>} />

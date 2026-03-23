@@ -10,8 +10,7 @@ export default function AdminAgents() {
   const [expandedAgent, setExpandedAgent] = useState<number | null>(null);
   const [rejectNote, setRejectNote] = useState("");
   const [rejectingCat, setRejectingCat] = useState<{ agentId: number; categoryId: number } | null>(null);
-  const [rejectingDoc, setRejectingDoc] = useState<number | null>(null);
-  const [docRejectNote, setDocRejectNote] = useState("");
+  const [filter, setFilter] = useState<"all" | "needs-verification">("needs-verification");
 
   const load = () => {
     api.get("/admin/agents").then((r) => { setAgents(r.data.agents); setLoading(false); }).catch(() => setLoading(false));
@@ -32,39 +31,55 @@ export default function AdminAgents() {
     } catch (err: any) { toast.error(err.response?.data?.error || "Failed"); }
   };
 
-  const handleDoc = async (docId: number, status: "APPROVED" | "REJECTED") => {
-    try {
-      await api.patch(`/admin/agents/documents/${docId}`, {
-        status,
-        rejectionNote: status === "REJECTED" ? docRejectNote : undefined,
-      });
-      toast.success(status === "APPROVED" ? "Document approved" : "Document rejected");
-      setRejectingDoc(null);
-      setDocRejectNote("");
-      load();
-    } catch { toast.error("Failed"); }
-  };
+  const agentsNeedingVerification = agents.filter(
+    (agent) =>
+      !agent.isVerified ||
+      (agent.categories || []).some((ac: any) => !ac.isVerified),
+  );
 
-  const statusBadge = (status: string) => {
-    const map: Record<string, string> = {
-      PENDING: "bg-yellow-100 text-yellow-700",
-      APPROVED: "bg-green-100 text-green-700",
-      REJECTED: "bg-red-100 text-red-600",
-    };
-    return map[status] || "bg-gray-100 text-gray-600";
-  };
+  const visibleAgents =
+    filter === "needs-verification" ? agentsNeedingVerification : agents;
 
   return (
     <div className="px-4 lg:px-6 py-4">
-      <h1 className="text-lg font-semibold text-gray-900 mb-4">Agents</h1>
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+        <h1 className="text-lg font-semibold text-gray-900">Agents</h1>
+
+        <div className="inline-flex rounded-full border border-gray-200 bg-white p-1">
+          <button
+            onClick={() => setFilter("needs-verification")}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition ${
+              filter === "needs-verification"
+                ? "bg-gray-900 text-white"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            Needs verification ({agentsNeedingVerification.length})
+          </button>
+          <button
+            onClick={() => setFilter("all")}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition ${
+              filter === "all"
+                ? "bg-gray-900 text-white"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            All ({agents.length})
+          </button>
+        </div>
+      </div>
 
       {loading ? (
         <div className="flex items-center justify-center h-32"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400" /></div>
-      ) : agents.length === 0 ? (
-        <p className="text-gray-400 text-center py-8 bg-white rounded-lg border text-sm">No agents registered yet</p>
+      ) : visibleAgents.length === 0 ? (
+        <p className="text-gray-400 text-center py-8 bg-white rounded-lg border text-sm">
+          {filter === "needs-verification"
+            ? "No agents are pending verification"
+            : "No agents registered yet"}
+        </p>
       ) : (
         <div className="space-y-3">
-          {agents.map((agent) => {
+          {visibleAgents.map((agent) => {
             const expanded = expandedAgent === agent.id;
             return (
               <div key={agent.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -100,51 +115,7 @@ export default function AdminAgents() {
                 {/* Expanded Detail */}
                 {expanded && (
                   <div className="border-t border-gray-100 px-4 pb-4 pt-3 space-y-4">
-                    {/* Per-Category Verification */}
-                    {agent.categories?.length > 0 && (
-                      <div>
-                        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Category Verification</p>
-                        <div className="space-y-2">
-                          {agent.categories.map((ac: any) => (
-                            <div key={ac.id} className="bg-gray-50 rounded-lg p-3">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <span className="text-sm font-medium text-gray-900 capitalize">{ac.category?.name}</span>
-                                  <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded font-medium ${ac.isVerified ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
-                                    {ac.isVerified ? "Verified" : "Pending"}
-                                  </span>
-                                  {ac.rejectionNote && <p className="text-[10px] text-red-500 mt-0.5">Rejected: {ac.rejectionNote}</p>}
-                                </div>
-                                {!ac.isVerified && (
-                                  <div className="flex gap-1">
-                                    <button onClick={(e) => { e.stopPropagation(); verifyCategory(agent.id, ac.category?.id, "approve"); }}
-                                      className="px-3 py-1 bg-green-600 text-white rounded-full text-[10px] font-semibold hover:bg-green-700 active:scale-[0.97] transition-all flex items-center gap-1">
-                                      <Check size={10} /> Approve
-                                    </button>
-                                    {rejectingCat?.agentId === agent.id && rejectingCat?.categoryId === ac.category?.id ? (
-                                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                                        <input value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} placeholder="Rejection reason"
-                                          className="px-2 py-1 border rounded text-[10px] w-28 outline-none" />
-                                        <button onClick={() => verifyCategory(agent.id, ac.category?.id, "reject")}
-                                          className="px-2 py-1 bg-red-600 text-white rounded-full text-[10px] font-semibold hover:bg-red-700 transition-all">Reject</button>
-                                        <button onClick={() => setRejectingCat(null)} className="text-gray-400 hover:text-gray-600"><X size={12} /></button>
-                                      </div>
-                                    ) : (
-                                      <button onClick={(e) => { e.stopPropagation(); setRejectingCat({ agentId: agent.id, categoryId: ac.category?.id }); }}
-                                        className="px-3 py-1 bg-red-50 text-red-600 rounded-full text-[10px] font-semibold hover:bg-red-100 border border-red-200 active:scale-[0.97] transition-all flex items-center gap-1">
-                                        <XCircle size={10} /> Reject
-                                      </button>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Documents */}
+                    {/* Uploaded Documents (view only) */}
                     {agent.documents?.length > 0 && (
                       <div>
                         <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Documents</p>
@@ -159,28 +130,29 @@ export default function AdminAgents() {
                               </div>
                               <div className="p-2">
                                 <p className="text-[10px] font-medium text-gray-700 truncate">{doc.requirement?.name || "Document"}</p>
-                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${statusBadge(doc.status)}`}>{doc.status}</span>
+                                <div className="flex items-center gap-1 mt-1 flex-wrap">
+                                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${
+                                    doc.status === "APPROVED"
+                                      ? "bg-green-100 text-green-700"
+                                      : doc.status === "REJECTED"
+                                        ? "bg-red-100 text-red-600"
+                                        : "bg-yellow-100 text-yellow-700"
+                                  }`}>
+                                    {doc.status}
+                                  </span>
+                                  {doc.status === "PENDING" && new Date(doc.updatedAt).getTime() > new Date(doc.createdAt).getTime() && (
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-blue-100 text-blue-700">
+                                      Resubmitted
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[9px] text-gray-400 mt-0.5">
+                                  Updated: {new Date(doc.updatedAt).toLocaleString()}
+                                </p>
+                                <p className="text-[9px] text-gray-400 mt-0.5">
+                                  Re-upload attempts: {doc.resubmitCount ?? 0}/5
+                                </p>
                                 {doc.rejectionNote && <p className="text-[9px] text-red-500 mt-0.5">{doc.rejectionNote}</p>}
-                                {doc.status === "PENDING" && (
-                                  <div className="flex gap-1 mt-1.5">
-                                    <button onClick={() => handleDoc(doc.id, "APPROVED")}
-                                      className="flex-1 bg-green-600 text-white py-1 rounded-full text-[9px] font-semibold hover:bg-green-700 active:scale-[0.97] transition-all">Approve</button>
-                                    {rejectingDoc === doc.id ? (
-                                      <div className="flex-1 space-y-1">
-                                        <input value={docRejectNote} onChange={(e) => setDocRejectNote(e.target.value)} placeholder="Reason"
-                                          className="w-full px-1.5 py-0.5 border rounded text-[9px] outline-none" />
-                                        <div className="flex gap-0.5">
-                                          <button onClick={() => handleDoc(doc.id, "REJECTED")}
-                                            className="flex-1 bg-red-600 text-white py-0.5 rounded-full text-[9px] font-semibold">Reject</button>
-                                          <button onClick={() => setRejectingDoc(null)} className="text-gray-400"><X size={10} /></button>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <button onClick={() => setRejectingDoc(doc.id)}
-                                        className="flex-1 bg-red-50 text-red-600 py-1 rounded-full text-[9px] font-semibold hover:bg-red-100 border border-red-200 transition-all">Reject</button>
-                                    )}
-                                  </div>
-                                )}
                               </div>
                             </div>
                           ))}
@@ -188,7 +160,7 @@ export default function AdminAgents() {
                       </div>
                     )}
 
-                    {/* Legacy documents */}
+                    {/* Legacy uploaded docs (view only) */}
                     {(agent.id_proof || agent.address_proof) && (!agent.documents || agent.documents.length === 0) && (
                       <div>
                         <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Legacy Documents</p>
@@ -223,6 +195,67 @@ export default function AdminAgents() {
 
                     {!agent.id_proof && !agent.address_proof && (!agent.documents || agent.documents.length === 0) && !agent.isVerified && (
                       <p className="text-[11px] text-red-400 italic flex items-center gap-1"><Upload size={11} /> No documents submitted</p>
+                    )}
+
+                    {/* Per-Category Verification */}
+                    {agent.categories?.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Category Verification</p>
+                        <div className="space-y-2">
+                          {agent.categories.map((ac: any) => (
+                            <div key={ac.id} className="bg-gray-50 rounded-lg p-3">
+                              {(() => {
+                                const categoryDocs = (agent.documents || []).filter(
+                                  (d: any) => d.requirement?.categoryId === ac.category?.id,
+                                );
+                                const hasResubmitted = categoryDocs.some(
+                                  (d: any) =>
+                                    d.status === "PENDING" &&
+                                    new Date(d.updatedAt).getTime() > new Date(d.createdAt).getTime(),
+                                );
+                                return (
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <span className="text-sm font-medium text-gray-900 capitalize">{ac.category?.name}</span>
+                                  <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded font-medium ${ac.isVerified ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
+                                    {ac.isVerified ? "Verified" : "Pending"}
+                                  </span>
+                                  {hasResubmitted && (
+                                    <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded font-medium bg-blue-100 text-blue-700">
+                                      Resubmitted docs
+                                    </span>
+                                  )}
+                                  {ac.rejectionNote && <p className="text-[10px] text-red-500 mt-0.5">Rejected: {ac.rejectionNote}</p>}
+                                </div>
+                                {!ac.isVerified && (
+                                  <div className="flex gap-1">
+                                    <button onClick={(e) => { e.stopPropagation(); verifyCategory(agent.id, ac.category?.id, "approve"); }}
+                                      className="px-3 py-1 bg-green-600 text-white rounded-full text-[10px] font-semibold hover:bg-green-700 active:scale-[0.97] transition-all flex items-center gap-1">
+                                      <Check size={10} /> Approve
+                                    </button>
+                                    {rejectingCat?.agentId === agent.id && rejectingCat?.categoryId === ac.category?.id ? (
+                                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                        <input value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} placeholder="Rejection reason"
+                                          className="px-2 py-1 border rounded text-[10px] w-28 outline-none" />
+                                        <button onClick={() => verifyCategory(agent.id, ac.category?.id, "reject")}
+                                          className="px-2 py-1 bg-red-600 text-white rounded-full text-[10px] font-semibold hover:bg-red-700 transition-all">Reject</button>
+                                        <button onClick={() => setRejectingCat(null)} className="text-gray-400 hover:text-gray-600"><X size={12} /></button>
+                                      </div>
+                                    ) : (
+                                      <button onClick={(e) => { e.stopPropagation(); setRejectingCat({ agentId: agent.id, categoryId: ac.category?.id }); }}
+                                        className="px-3 py-1 bg-red-50 text-red-600 rounded-full text-[10px] font-semibold hover:bg-red-100 border border-red-200 active:scale-[0.97] transition-all flex items-center gap-1">
+                                        <XCircle size={10} /> Reject
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                                );
+                              })()}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}
