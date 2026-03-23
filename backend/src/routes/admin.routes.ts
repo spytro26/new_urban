@@ -320,9 +320,6 @@ router.patch(
         rejectionNote?: string;
       };
 
-      // Backward compatible parsing:
-      // - preferred payload from frontend: { action: "approve" | "reject" }
-      // - legacy payload: { approve: boolean }
       const shouldApprove =
         action === "approve"
           ? true
@@ -334,9 +331,36 @@ router.patch(
 
       const ac = await prisma.agentCategory.findUnique({
         where: { agentId_categoryId: { agentId, categoryId } },
+        include: {
+          category: {
+            include: {
+              documentRequirements: { select: { id: true } },
+            },
+          },
+        },
       });
       if (!ac)
         return res.status(404).json({ error: "agent category not found" });
+
+      // Get requirement IDs for this category
+      const requirementIds = ac.category.documentRequirements.map((r) => r.id);
+
+      if (shouldApprove) {
+        // When approving category: auto-approve all PENDING documents for this category
+        await prisma.agentDocument.updateMany({
+          where: {
+            agentId,
+            requirementId: { in: requirementIds },
+            status: "PENDING",
+          },
+          data: {
+            status: "APPROVED",
+            rejectionNote: null,
+          },
+        });
+      }
+      // When rejecting category: DON'T change document statuses
+      // Agent only needs to re-upload documents that are already REJECTED
 
       const updated = await prisma.agentCategory.update({
         where: { id: ac.id },
@@ -381,17 +405,128 @@ router.patch("/agents/documents/:docId", async (req, res) => {
         .status(400)
         .json({ error: "status must be APPROVED or REJECTED" });
 
-    const doc = await prisma.agentDocument.update({
+    // Get the document with its requirement info
+    const doc = await prisma.agentDocument.findUnique({
+      where: { id: docId },
+      include: {
+        requirement: {
+          select: {
+            id: true,
+            name: true,
+            categoryId: true,
+            isRequired: true,
+          },
+        },
+      },
+    });
+    if (!doc) return res.status(404).json({ error: "document not found" });
+
+    const { agentId, requirement } = doc;
+    const cleanedNote = rejectionNote?.trim();
+
+    // Update this document
+    const updatedDoc = await prisma.agentDocument.update({
       where: { id: docId },
       data: {
         status: status as any,
-        rejectionNote:
-          status === "REJECTED" ? (rejectionNote ?? "Rejected") : null,
+        rejectionNote: status === "REJECTED" ? (cleanedNote || "Rejected") : null,
       },
     });
-    res.json({ document: doc });
-  } catch {
-    res.status(500).json({ error: "document not found" });
+
+    // Find all categories that need this same-named document
+    const sameNameRequirements = await prisma.documentRequirement.findMany({
+      where: {
+        name: { equals: requirement.name, mode: "insensitive" },
+        category: {
+          agentCategories: { some: { agentId } },
+        },
+      },
+      select: { id: true, categoryId: true },
+    });
+
+    const affectedCategoryIds = [
+      ...new Set(sameNameRequirements.map((r) => r.categoryId)),
+    ];
+
+    if (status === "REJECTED") {
+      // When rejecting a document: reject all categories that need this document
+      // Also reject the same-named documents in other categories
+      const sameNameReqIds = sameNameRequirements.map((r) => r.id);
+
+      // Mark same-named documents as rejected too
+      await prisma.agentDocument.updateMany({
+        where: {
+          agentId,
+          requirementId: { in: sameNameReqIds },
+          id: { not: docId }, // Don't update the one we already updated
+        },
+        data: {
+          status: "REJECTED",
+          rejectionNote: cleanedNote || "Rejected",
+        },
+      });
+
+      // Reject all affected categories
+      await prisma.agentCategory.updateMany({
+        where: {
+          agentId,
+          categoryId: { in: affectedCategoryIds },
+        },
+        data: {
+          isVerified: false,
+          rejectionNote: `Document "${requirement.name}" was rejected: ${cleanedNote || "Rejected"}`,
+        },
+      });
+    } else {
+      // When approving a document: check if all required docs for each affected category are now approved
+      for (const catId of affectedCategoryIds) {
+        // Get all required document requirements for this category
+        const requiredReqs = await prisma.documentRequirement.findMany({
+          where: { categoryId: catId, isRequired: true },
+          select: { id: true },
+        });
+
+        if (requiredReqs.length === 0) {
+          // No required docs, auto-approve category
+          await prisma.agentCategory.update({
+            where: { agentId_categoryId: { agentId, categoryId: catId } },
+            data: { isVerified: true, rejectionNote: null },
+          });
+          continue;
+        }
+
+        // Check if all required docs are approved
+        const approvedCount = await prisma.agentDocument.count({
+          where: {
+            agentId,
+            requirementId: { in: requiredReqs.map((r) => r.id) },
+            status: "APPROVED",
+          },
+        });
+
+        if (approvedCount >= requiredReqs.length) {
+          // All required docs approved, auto-approve category
+          await prisma.agentCategory.update({
+            where: { agentId_categoryId: { agentId, categoryId: catId } },
+            data: { isVerified: true, rejectionNote: null },
+          });
+        }
+      }
+    }
+
+    // Update overall agent verification status
+    const verifiedCount = await prisma.agentCategory.count({
+      where: { agentId, isVerified: true },
+    });
+    await prisma.agent.update({
+      where: { id: agentId },
+      data: { isVerified: verifiedCount > 0 },
+    });
+
+    res.json({ document: updatedDoc });
+  } catch (err) {
+    console.error("Document review error:", err);
+    res.status(500).json({ error: "Something went wrong" });
   }
 });
 
@@ -498,15 +633,15 @@ router.patch("/orders/:orderId/assign", async (req, res) => {
       return res.status(400).json({ error: "agentIds is required" });
     }
 
-    // verify all agents exist and are available + verified
-    const agents = await prisma.agent.findMany({
-      where: { id: { in: agentIds }, isAvailable: true, isVerified: true },
-    });
-    if (agents.length === 0)
-      return res.status(404).json({ error: "no valid agents found" });
-
     const order = await prisma.orderGroup.findUnique({
       where: { id: orderId },
+      include: {
+        orders: {
+          include: {
+            subservice: { select: { categoryId: true } },
+          },
+        },
+      },
     });
     if (!order) return res.status(404).json({ error: "order not found" });
 
@@ -515,6 +650,37 @@ router.patch("/orders/:orderId/assign", async (req, res) => {
         .status(400)
         .json({ error: "only PENDING orders can be assigned" });
     }
+
+    // Get category IDs from the order's subservices
+    const categoryIds = [
+      ...new Set(
+        order.orders
+          .map((o) => o.subservice?.categoryId)
+          .filter((id): id is number => id !== null && id !== undefined)
+      ),
+    ];
+
+    // Verify agents are available, verified overall, AND verified for the order's category
+    const agents = await prisma.agent.findMany({
+      where: {
+        id: { in: agentIds },
+        isAvailable: true,
+        isVerified: true,
+        // Must be verified for at least one of the order's categories
+        ...(categoryIds.length > 0 && {
+          categories: {
+            some: {
+              categoryId: { in: categoryIds },
+              isVerified: true,
+            },
+          },
+        }),
+      },
+    });
+    if (agents.length === 0)
+      return res.status(404).json({
+        error: "no valid agents found (must be verified for the order's category)",
+      });
 
     // Create OrderAssignment for each agent + update order status
     await prisma.$transaction(async (tx) => {
@@ -734,6 +900,10 @@ router.get("/reports/monthly", async (req, res) => {
         totalEarnings: number;
         codCollected: number;
         onlineCollected: number;
+        serviceCodCollected: number;
+        serviceOnlineCollected: number;
+        materialCodCollected: number;
+        materialOnlineCollected: number;
         orderCount: number;
       }
     >();
@@ -750,6 +920,10 @@ router.get("/reports/monthly", async (req, res) => {
           totalEarnings: 0,
           codCollected: 0,
           onlineCollected: 0,
+          serviceCodCollected: 0,
+          serviceOnlineCollected: 0,
+          materialCodCollected: 0,
+          materialOnlineCollected: 0,
           orderCount: 0,
         });
       }
@@ -764,9 +938,31 @@ router.get("/reports/monthly", async (req, res) => {
       a.extraEarnings += extraTotal;
       a.totalEarnings += orderTotal + extraTotal;
 
+      // Track service payments (non-extra-material payments)
       for (const p of o.payments) {
-        if (p.method === "CASH") a.codCollected += p.amount;
-        else a.onlineCollected += p.amount;
+        if (!p.isExtraMaterial) {
+          if (p.method === "CASH") {
+            a.codCollected += p.amount;
+            a.serviceCodCollected += p.amount;
+          } else {
+            a.onlineCollected += p.amount;
+            a.serviceOnlineCollected += p.amount;
+          }
+        }
+      }
+
+      // Track material payments from extraMaterial.paymentMethod
+      for (const m of o.extraMaterials) {
+        if (m.paid && m.paymentMethod) {
+          const amount = m.price * m.quantity;
+          if (m.paymentMethod === "CASH") {
+            a.codCollected += amount;
+            a.materialCodCollected += amount;
+          } else {
+            a.onlineCollected += amount;
+            a.materialOnlineCollected += amount;
+          }
+        }
       }
     }
 
@@ -847,6 +1043,10 @@ router.post("/settlements/generate", async (req, res) => {
         totalEarnings: number;
         codCollected: number;
         onlineCollected: number;
+        serviceCodCollected: number;
+        serviceOnlineCollected: number;
+        materialCodCollected: number;
+        materialOnlineCollected: number;
       }
     >();
 
@@ -859,6 +1059,10 @@ router.post("/settlements/generate", async (req, res) => {
           totalEarnings: 0,
           codCollected: 0,
           onlineCollected: 0,
+          serviceCodCollected: 0,
+          serviceOnlineCollected: 0,
+          materialCodCollected: 0,
+          materialOnlineCollected: 0,
         });
       }
       const a = agentMap.get(aid)!;
@@ -871,9 +1075,31 @@ router.post("/settlements/generate", async (req, res) => {
       a.extraEarnings += extraTotal;
       a.totalEarnings += orderTotal + extraTotal;
 
+      // Track service payments (non-extra-material payments)
       for (const p of o.payments) {
-        if (p.method === "CASH") a.codCollected += p.amount;
-        else a.onlineCollected += p.amount;
+        if (!p.isExtraMaterial) {
+          if (p.method === "CASH") {
+            a.codCollected += p.amount;
+            a.serviceCodCollected += p.amount;
+          } else {
+            a.onlineCollected += p.amount;
+            a.serviceOnlineCollected += p.amount;
+          }
+        }
+      }
+
+      // Track material payments from extraMaterial.paymentMethod
+      for (const m of o.extraMaterials) {
+        if (m.paid && m.paymentMethod) {
+          const amount = m.price * m.quantity;
+          if (m.paymentMethod === "CASH") {
+            a.codCollected += amount;
+            a.materialCodCollected += amount;
+          } else {
+            a.onlineCollected += amount;
+            a.materialOnlineCollected += amount;
+          }
+        }
       }
     }
 
@@ -1048,6 +1274,10 @@ router.get("/reports/monthly/download", async (req, res) => {
           totalEarnings: 0,
           codCollected: 0,
           onlineCollected: 0,
+          serviceCodCollected: 0,
+          serviceOnlineCollected: 0,
+          materialCodCollected: 0,
+          materialOnlineCollected: 0,
           orderCount: 0,
         });
       }
@@ -1061,15 +1291,38 @@ router.get("/reports/monthly/download", async (req, res) => {
       a.serviceEarnings += orderTotal;
       a.extraEarnings += extraTotal;
       a.totalEarnings += orderTotal + extraTotal;
+
+      // Track service payments (non-extra-material payments)
       for (const p of o.payments) {
-        if (p.method === "CASH") a.codCollected += p.amount;
-        else a.onlineCollected += p.amount;
+        if (!p.isExtraMaterial) {
+          if (p.method === "CASH") {
+            a.codCollected += p.amount;
+            a.serviceCodCollected += p.amount;
+          } else {
+            a.onlineCollected += p.amount;
+            a.serviceOnlineCollected += p.amount;
+          }
+        }
+      }
+
+      // Track material payments from extraMaterial.paymentMethod
+      for (const m of o.extraMaterials) {
+        if (m.paid && m.paymentMethod) {
+          const amount = m.price * m.quantity;
+          if (m.paymentMethod === "CASH") {
+            a.codCollected += amount;
+            a.materialCodCollected += amount;
+          } else {
+            a.onlineCollected += amount;
+            a.materialOnlineCollected += amount;
+          }
+        }
       }
     }
 
     // Build CSV — commission only on service earnings
     const header =
-      "Agent ID,Agent Name,Agent Email,Orders,Service Earnings,Extra Material,Total Earnings,Commission (5% svc),Net Payable,COD Collected,Online Collected,Amount To Send,Carry Over,Prev Carry\n";
+      "Agent ID,Agent Name,Agent Email,Orders,Service Earnings,Service COD,Service Online,Extra Material,Material COD,Material Online,Total Earnings,Commission (5% svc),Net Payable,COD Collected,Online Collected,Amount To Send,Carry Over,Prev Carry\n";
     let csv = header;
 
     for (const a of agentMap2.values()) {
@@ -1090,7 +1343,7 @@ router.get("/reports/monthly/download", async (req, res) => {
       const amountToSend = Math.max(0, netPayable - a.codCollected);
       const carryOver = Math.max(0, a.codCollected - netPayable);
 
-      csv += `${a.agentId},${a.name},${a.email},${a.orderCount},${a.serviceEarnings.toFixed(2)},${a.extraEarnings.toFixed(2)},${a.totalEarnings.toFixed(2)},${commission.toFixed(2)},${(a.totalEarnings - commission).toFixed(2)},${a.codCollected.toFixed(2)},${a.onlineCollected.toFixed(2)},${amountToSend.toFixed(2)},${carryOver.toFixed(2)},${previousCarry.toFixed(2)}\n`;
+      csv += `${a.agentId},${a.name},${a.email},${a.orderCount},${a.serviceEarnings.toFixed(2)},${a.serviceCodCollected.toFixed(2)},${a.serviceOnlineCollected.toFixed(2)},${a.extraEarnings.toFixed(2)},${a.materialCodCollected.toFixed(2)},${a.materialOnlineCollected.toFixed(2)},${a.totalEarnings.toFixed(2)},${commission.toFixed(2)},${(a.totalEarnings - commission).toFixed(2)},${a.codCollected.toFixed(2)},${a.onlineCollected.toFixed(2)},${amountToSend.toFixed(2)},${carryOver.toFixed(2)},${previousCarry.toFixed(2)}\n`;
     }
 
     res.setHeader("Content-Type", "text/csv");

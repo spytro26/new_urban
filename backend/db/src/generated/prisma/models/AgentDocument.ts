@@ -30,12 +30,14 @@ export type AgentDocumentAvgAggregateOutputType = {
   id: number | null
   agentId: number | null
   requirementId: number | null
+  resubmitCount: number | null
 }
 
 export type AgentDocumentSumAggregateOutputType = {
   id: number | null
   agentId: number | null
   requirementId: number | null
+  resubmitCount: number | null
 }
 
 export type AgentDocumentMinAggregateOutputType = {
@@ -44,6 +46,7 @@ export type AgentDocumentMinAggregateOutputType = {
   requirementId: number | null
   url: string | null
   status: $Enums.documentStatus | null
+  resubmitCount: number | null
   rejectionNote: string | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -55,6 +58,7 @@ export type AgentDocumentMaxAggregateOutputType = {
   requirementId: number | null
   url: string | null
   status: $Enums.documentStatus | null
+  resubmitCount: number | null
   rejectionNote: string | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -66,6 +70,7 @@ export type AgentDocumentCountAggregateOutputType = {
   requirementId: number
   url: number
   status: number
+  resubmitCount: number
   rejectionNote: number
   createdAt: number
   updatedAt: number
@@ -77,12 +82,14 @@ export type AgentDocumentAvgAggregateInputType = {
   id?: true
   agentId?: true
   requirementId?: true
+  resubmitCount?: true
 }
 
 export type AgentDocumentSumAggregateInputType = {
   id?: true
   agentId?: true
   requirementId?: true
+  resubmitCount?: true
 }
 
 export type AgentDocumentMinAggregateInputType = {
@@ -91,6 +98,7 @@ export type AgentDocumentMinAggregateInputType = {
   requirementId?: true
   url?: true
   status?: true
+  resubmitCount?: true
   rejectionNote?: true
   createdAt?: true
   updatedAt?: true
@@ -102,6 +110,7 @@ export type AgentDocumentMaxAggregateInputType = {
   requirementId?: true
   url?: true
   status?: true
+  resubmitCount?: true
   rejectionNote?: true
   createdAt?: true
   updatedAt?: true
@@ -113,6 +122,7 @@ export type AgentDocumentCountAggregateInputType = {
   requirementId?: true
   url?: true
   status?: true
+  resubmitCount?: true
   rejectionNote?: true
   createdAt?: true
   updatedAt?: true
@@ -211,6 +221,7 @@ export type AgentDocumentGroupByOutputType = {
   requirementId: number
   url: string
   status: $Enums.documentStatus
+  resubmitCount: number
   rejectionNote: string | null
   createdAt: Date
   updatedAt: Date
@@ -245,6 +256,7 @@ export type AgentDocumentWhereInput = {
   requirementId?: Prisma.IntFilter<"AgentDocument"> | number
   url?: Prisma.StringFilter<"AgentDocument"> | string
   status?: Prisma.EnumdocumentStatusFilter<"AgentDocument"> | $Enums.documentStatus
+  resubmitCount?: Prisma.IntFilter<"AgentDocument"> | number
   rejectionNote?: Prisma.StringNullableFilter<"AgentDocument"> | string | null
   createdAt?: Prisma.DateTimeFilter<"AgentDocument"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"AgentDocument"> | Date | string
@@ -258,6 +270,7 @@ export type AgentDocumentOrderByWithRelationInput = {
   requirementId?: Prisma.SortOrder
   url?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  resubmitCount?: Prisma.SortOrder
   rejectionNote?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -275,6 +288,7 @@ export type AgentDocumentWhereUniqueInput = Prisma.AtLeast<{
   requirementId?: Prisma.IntFilter<"AgentDocument"> | number
   url?: Prisma.StringFilter<"AgentDocument"> | string
   status?: Prisma.EnumdocumentStatusFilter<"AgentDocument"> | $Enums.documentStatus
+  resubmitCount?: Prisma.IntFilter<"AgentDocument"> | number
   rejectionNote?: Prisma.StringNullableFilter<"AgentDocument"> | string | null
   createdAt?: Prisma.DateTimeFilter<"AgentDocument"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"AgentDocument"> | Date | string
@@ -288,6 +302,7 @@ export type AgentDocumentOrderByWithAggregationInput = {
   requirementId?: Prisma.SortOrder
   url?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  resubmitCount?: Prisma.SortOrder
   rejectionNote?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -307,6 +322,7 @@ export type AgentDocumentScalarWhereWithAggregatesInput = {
   requirementId?: Prisma.IntWithAggregatesFilter<"AgentDocument"> | number
   url?: Prisma.StringWithAggregatesFilter<"AgentDocument"> | string
   status?: Prisma.EnumdocumentStatusWithAggregatesFilter<"AgentDocument"> | $Enums.documentStatus
+  resubmitCount?: Prisma.IntWithAggregatesFilter<"AgentDocument"> | number
   rejectionNote?: Prisma.StringNullableWithAggregatesFilter<"AgentDocument"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"AgentDocument"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"AgentDocument"> | Date | string
@@ -315,6 +331,7 @@ export type AgentDocumentScalarWhereWithAggregatesInput = {
 export type AgentDocumentCreateInput = {
   url: string
   status?: $Enums.documentStatus
+  resubmitCount?: number
   rejectionNote?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -328,6 +345,7 @@ export type AgentDocumentUncheckedCreateInput = {
   requirementId: number
   url: string
   status?: $Enums.documentStatus
+  resubmitCount?: number
   rejectionNote?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -336,6 +354,7 @@ export type AgentDocumentUncheckedCreateInput = {
 export type AgentDocumentUpdateInput = {
   url?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumdocumentStatusFieldUpdateOperationsInput | $Enums.documentStatus
+  resubmitCount?: Prisma.IntFieldUpdateOperationsInput | number
   rejectionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -349,6 +368,7 @@ export type AgentDocumentUncheckedUpdateInput = {
   requirementId?: Prisma.IntFieldUpdateOperationsInput | number
   url?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumdocumentStatusFieldUpdateOperationsInput | $Enums.documentStatus
+  resubmitCount?: Prisma.IntFieldUpdateOperationsInput | number
   rejectionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -360,6 +380,7 @@ export type AgentDocumentCreateManyInput = {
   requirementId: number
   url: string
   status?: $Enums.documentStatus
+  resubmitCount?: number
   rejectionNote?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -368,6 +389,7 @@ export type AgentDocumentCreateManyInput = {
 export type AgentDocumentUpdateManyMutationInput = {
   url?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumdocumentStatusFieldUpdateOperationsInput | $Enums.documentStatus
+  resubmitCount?: Prisma.IntFieldUpdateOperationsInput | number
   rejectionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -379,6 +401,7 @@ export type AgentDocumentUncheckedUpdateManyInput = {
   requirementId?: Prisma.IntFieldUpdateOperationsInput | number
   url?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumdocumentStatusFieldUpdateOperationsInput | $Enums.documentStatus
+  resubmitCount?: Prisma.IntFieldUpdateOperationsInput | number
   rejectionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -405,6 +428,7 @@ export type AgentDocumentCountOrderByAggregateInput = {
   requirementId?: Prisma.SortOrder
   url?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  resubmitCount?: Prisma.SortOrder
   rejectionNote?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -414,6 +438,7 @@ export type AgentDocumentAvgOrderByAggregateInput = {
   id?: Prisma.SortOrder
   agentId?: Prisma.SortOrder
   requirementId?: Prisma.SortOrder
+  resubmitCount?: Prisma.SortOrder
 }
 
 export type AgentDocumentMaxOrderByAggregateInput = {
@@ -422,6 +447,7 @@ export type AgentDocumentMaxOrderByAggregateInput = {
   requirementId?: Prisma.SortOrder
   url?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  resubmitCount?: Prisma.SortOrder
   rejectionNote?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -433,6 +459,7 @@ export type AgentDocumentMinOrderByAggregateInput = {
   requirementId?: Prisma.SortOrder
   url?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  resubmitCount?: Prisma.SortOrder
   rejectionNote?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -442,6 +469,7 @@ export type AgentDocumentSumOrderByAggregateInput = {
   id?: Prisma.SortOrder
   agentId?: Prisma.SortOrder
   requirementId?: Prisma.SortOrder
+  resubmitCount?: Prisma.SortOrder
 }
 
 export type AgentDocumentCreateNestedManyWithoutAgentInput = {
@@ -535,6 +563,7 @@ export type EnumdocumentStatusFieldUpdateOperationsInput = {
 export type AgentDocumentCreateWithoutAgentInput = {
   url: string
   status?: $Enums.documentStatus
+  resubmitCount?: number
   rejectionNote?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -546,6 +575,7 @@ export type AgentDocumentUncheckedCreateWithoutAgentInput = {
   requirementId: number
   url: string
   status?: $Enums.documentStatus
+  resubmitCount?: number
   rejectionNote?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -586,6 +616,7 @@ export type AgentDocumentScalarWhereInput = {
   requirementId?: Prisma.IntFilter<"AgentDocument"> | number
   url?: Prisma.StringFilter<"AgentDocument"> | string
   status?: Prisma.EnumdocumentStatusFilter<"AgentDocument"> | $Enums.documentStatus
+  resubmitCount?: Prisma.IntFilter<"AgentDocument"> | number
   rejectionNote?: Prisma.StringNullableFilter<"AgentDocument"> | string | null
   createdAt?: Prisma.DateTimeFilter<"AgentDocument"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"AgentDocument"> | Date | string
@@ -594,6 +625,7 @@ export type AgentDocumentScalarWhereInput = {
 export type AgentDocumentCreateWithoutRequirementInput = {
   url: string
   status?: $Enums.documentStatus
+  resubmitCount?: number
   rejectionNote?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -605,6 +637,7 @@ export type AgentDocumentUncheckedCreateWithoutRequirementInput = {
   agentId: number
   url: string
   status?: $Enums.documentStatus
+  resubmitCount?: number
   rejectionNote?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -641,6 +674,7 @@ export type AgentDocumentCreateManyAgentInput = {
   requirementId: number
   url: string
   status?: $Enums.documentStatus
+  resubmitCount?: number
   rejectionNote?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -649,6 +683,7 @@ export type AgentDocumentCreateManyAgentInput = {
 export type AgentDocumentUpdateWithoutAgentInput = {
   url?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumdocumentStatusFieldUpdateOperationsInput | $Enums.documentStatus
+  resubmitCount?: Prisma.IntFieldUpdateOperationsInput | number
   rejectionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -660,6 +695,7 @@ export type AgentDocumentUncheckedUpdateWithoutAgentInput = {
   requirementId?: Prisma.IntFieldUpdateOperationsInput | number
   url?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumdocumentStatusFieldUpdateOperationsInput | $Enums.documentStatus
+  resubmitCount?: Prisma.IntFieldUpdateOperationsInput | number
   rejectionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -670,6 +706,7 @@ export type AgentDocumentUncheckedUpdateManyWithoutAgentInput = {
   requirementId?: Prisma.IntFieldUpdateOperationsInput | number
   url?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumdocumentStatusFieldUpdateOperationsInput | $Enums.documentStatus
+  resubmitCount?: Prisma.IntFieldUpdateOperationsInput | number
   rejectionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -680,6 +717,7 @@ export type AgentDocumentCreateManyRequirementInput = {
   agentId: number
   url: string
   status?: $Enums.documentStatus
+  resubmitCount?: number
   rejectionNote?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -688,6 +726,7 @@ export type AgentDocumentCreateManyRequirementInput = {
 export type AgentDocumentUpdateWithoutRequirementInput = {
   url?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumdocumentStatusFieldUpdateOperationsInput | $Enums.documentStatus
+  resubmitCount?: Prisma.IntFieldUpdateOperationsInput | number
   rejectionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -699,6 +738,7 @@ export type AgentDocumentUncheckedUpdateWithoutRequirementInput = {
   agentId?: Prisma.IntFieldUpdateOperationsInput | number
   url?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumdocumentStatusFieldUpdateOperationsInput | $Enums.documentStatus
+  resubmitCount?: Prisma.IntFieldUpdateOperationsInput | number
   rejectionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -709,6 +749,7 @@ export type AgentDocumentUncheckedUpdateManyWithoutRequirementInput = {
   agentId?: Prisma.IntFieldUpdateOperationsInput | number
   url?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumdocumentStatusFieldUpdateOperationsInput | $Enums.documentStatus
+  resubmitCount?: Prisma.IntFieldUpdateOperationsInput | number
   rejectionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -722,6 +763,7 @@ export type AgentDocumentSelect<ExtArgs extends runtime.Types.Extensions.Interna
   requirementId?: boolean
   url?: boolean
   status?: boolean
+  resubmitCount?: boolean
   rejectionNote?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -735,6 +777,7 @@ export type AgentDocumentSelectCreateManyAndReturn<ExtArgs extends runtime.Types
   requirementId?: boolean
   url?: boolean
   status?: boolean
+  resubmitCount?: boolean
   rejectionNote?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -748,6 +791,7 @@ export type AgentDocumentSelectUpdateManyAndReturn<ExtArgs extends runtime.Types
   requirementId?: boolean
   url?: boolean
   status?: boolean
+  resubmitCount?: boolean
   rejectionNote?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -761,12 +805,13 @@ export type AgentDocumentSelectScalar = {
   requirementId?: boolean
   url?: boolean
   status?: boolean
+  resubmitCount?: boolean
   rejectionNote?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type AgentDocumentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "agentId" | "requirementId" | "url" | "status" | "rejectionNote" | "createdAt" | "updatedAt", ExtArgs["result"]["agentDocument"]>
+export type AgentDocumentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "agentId" | "requirementId" | "url" | "status" | "resubmitCount" | "rejectionNote" | "createdAt" | "updatedAt", ExtArgs["result"]["agentDocument"]>
 export type AgentDocumentInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   agent?: boolean | Prisma.AgentDefaultArgs<ExtArgs>
   requirement?: boolean | Prisma.DocumentRequirementDefaultArgs<ExtArgs>
@@ -792,6 +837,7 @@ export type $AgentDocumentPayload<ExtArgs extends runtime.Types.Extensions.Inter
     requirementId: number
     url: string
     status: $Enums.documentStatus
+    resubmitCount: number
     rejectionNote: string | null
     createdAt: Date
     updatedAt: Date
@@ -1225,6 +1271,7 @@ export interface AgentDocumentFieldRefs {
   readonly requirementId: Prisma.FieldRef<"AgentDocument", 'Int'>
   readonly url: Prisma.FieldRef<"AgentDocument", 'String'>
   readonly status: Prisma.FieldRef<"AgentDocument", 'documentStatus'>
+  readonly resubmitCount: Prisma.FieldRef<"AgentDocument", 'Int'>
   readonly rejectionNote: Prisma.FieldRef<"AgentDocument", 'String'>
   readonly createdAt: Prisma.FieldRef<"AgentDocument", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"AgentDocument", 'DateTime'>

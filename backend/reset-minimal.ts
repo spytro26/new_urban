@@ -2,14 +2,13 @@ import { prisma, pool } from "./db/index.ts";
 import { resetAndSeedMinimal } from "./src/utils/reset-and-seed-minimal.ts";
 
 async function run() {
-  console.log("Resetting database and seeding minimal accounts...");
+  console.log("Resetting users and agents (keeping admin, categories, cities, subservices)...");
 
   const result = await resetAndSeedMinimal(prisma);
 
   console.log("\nDone ✅");
-  console.log("City:", result.city.name, "(active:", result.city.isActive, ")");
-  console.log("Credentials:");
-  console.log("  Admin -> admin@gmail.com / ankushraj");
+  console.log("Preserved: Admin, categories, cities, subservices, document requirements");
+  console.log("\nNew test accounts created:");
   console.log("  User  -> user@gmail.com / ankushraj");
   console.log("  Agent -> agent@gmail.com / ankushraj");
 }

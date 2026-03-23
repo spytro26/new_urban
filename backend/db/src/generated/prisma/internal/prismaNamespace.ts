@@ -1903,6 +1903,7 @@ export const AgentDocumentScalarFieldEnum = {
   requirementId: 'requirementId',
   url: 'url',
   status: 'status',
+  resubmitCount: 'resubmitCount',
   rejectionNote: 'rejectionNote',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'

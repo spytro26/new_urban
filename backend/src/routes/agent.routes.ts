@@ -382,6 +382,22 @@ router.patch("/availability", async (req, res) => {
     const agent = await prisma.agent.findUnique({ where: { id: agentId } });
     if (!agent) return res.status(404).json({ error: "agent not found" });
 
+    // If agent is trying to go offline, check for ongoing tasks
+    if (agent.isAvailable) {
+      const ongoingTasks = await prisma.orderGroup.count({
+        where: {
+          assignedAgentId: agentId,
+          status: { in: ["ON_THEWAY", "IN_PROGRESS"] },
+        },
+      });
+
+      if (ongoingTasks > 0) {
+        return res.status(400).json({
+          error: "Can't go offline during an ongoing task. Please complete your active jobs first.",
+        });
+      }
+    }
+
     const updated = await prisma.agent.update({
       where: { id: agentId },
       data: { isAvailable: !agent.isAvailable },
@@ -873,7 +889,8 @@ router.post(
         appliedToRequirementIds: targetRequirementIds,
         documents: docs,
       });
-    } catch {
+    } catch (err) {
+      console.error("Document upload error:", err);
       res.status(500).json({ error: "Something went wrong" });
     }
   },
