@@ -75,7 +75,7 @@ export default function AdminSubservices() {
   );
 
   return (
-    <div className="px-4 lg:px-6 py-4">
+    <div className="px-4 lg:px-6 py-4 pb-20 md:pb-6">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-lg font-semibold text-gray-900">Sub-Services</h1>
         <button onClick={() => setShowAdd(!showAdd)} className="bg-gray-900 text-white px-3.5 py-1.5 rounded-full text-xs font-semibold hover:bg-gray-800 active:scale-[0.97] flex items-center gap-1 transition-all shadow-sm">

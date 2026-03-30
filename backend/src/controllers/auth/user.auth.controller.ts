@@ -5,7 +5,7 @@ import { prisma } from "../../../db/index.ts";
 import { env } from "../../config/env.ts";
 
 export async function registerUser(req: Request, res: Response): Promise<void> {
-  const { email, password, name, address, pin, city, phone, profilepic } =
+  const { email, password, name, address, pin, city, phone, phoneCountry, profilepic } =
     req.body as {
       email?: string;
       password?: string;
@@ -14,6 +14,7 @@ export async function registerUser(req: Request, res: Response): Promise<void> {
       pin?: string;
       city?: string;
       phone?: string;
+      phoneCountry?: string;
       profilepic?: string;
     };
 
@@ -32,12 +33,19 @@ export async function registerUser(req: Request, res: Response): Promise<void> {
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
+  // Format phone number with country code
+  let formattedPhone: string | undefined;
+  if (phone) {
+    const countryCode = phoneCountry === "USA" ? "+1" : "+91";
+    formattedPhone = `${countryCode}${phone}`;
+  }
+
   const user = await prisma.user.create({
     data: {
       email,
       password: hashedPassword,
       ...(name && { name }),
-      ...(phone && { phone }),
+      ...(formattedPhone && { phone: formattedPhone }),
       ...(profilepic && { profilepic }),
       address: {
         create: {

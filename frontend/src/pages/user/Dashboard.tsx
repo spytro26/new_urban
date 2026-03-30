@@ -162,7 +162,7 @@ export default function UserHome() {
   }
 
   return (
-    <div className="px-4 lg:px-6 py-4">
+    <div className="px-4 lg:px-6 py-4 pb-20 md:pb-6">
       {/* HOME: Category selection */}
       {step === "home" && (
         <>

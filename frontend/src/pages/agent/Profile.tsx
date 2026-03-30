@@ -88,9 +88,7 @@ export default function AgentProfile() {
     try {
       const fd = new FormData();
       fd.append("document", file);
-      await api.post(`/agents/documents/${requirementId}`, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      await api.post(`/agents/documents/${requirementId}`, fd);
       toast.success("Document re-submitted successfully");
       load();
     } catch (err: any) {
@@ -126,7 +124,7 @@ export default function AgentProfile() {
     );
 
   return (
-    <div className="px-4 lg:px-6 py-4">
+    <div className="px-4 lg:px-6 py-4 pb-20 md:pb-6">
       {/* Header */}
       <div className="bg-white border border-gray-200 rounded-lg p-4 mb-3">
         <div className="flex items-center gap-3">

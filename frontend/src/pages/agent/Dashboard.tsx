@@ -97,7 +97,7 @@ export default function AgentDashboard() {
       const r = await api.patch("/agents/availability");
       toast.success(r.data.isAvailable ? "You're online now!" : "You're offline now");
       load();
-    } catch { toast.error("Failed to toggle"); }
+    } catch (err: any) { toast.error(err.response?.data?.error || "Failed to toggle"); }
     finally { setToggling(false); }
   };
 
@@ -147,7 +147,7 @@ export default function AgentDashboard() {
     }));
 
     return (
-      <div className="px-4 lg:px-6 py-4">
+      <div className="px-4 lg:px-6 py-4 pb-20 md:pb-6">
         <div className="max-w-md mx-auto">
           <div className="text-center mb-6">
             <ShieldCheck size={40} className="mx-auto text-amber-500 mb-3" />
@@ -258,7 +258,7 @@ export default function AgentDashboard() {
   // ─── OFFLINE STATE ────────────────────────────────
   if (!profile?.isAvailable) {
     return (
-      <div className="px-4 lg:px-6 py-4">
+      <div className="px-4 lg:px-6 py-4 pb-20 md:pb-6">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-lg font-semibold text-gray-900">Dashboard</h1>
@@ -294,7 +294,7 @@ export default function AgentDashboard() {
 
   // ─── ONLINE / NORMAL DASHBOARD ────────────────────
   return (
-    <div className="px-4 lg:px-6 py-4">
+    <div className="px-4 lg:px-6 py-4 pb-20 md:pb-6">
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-3">
           <div>

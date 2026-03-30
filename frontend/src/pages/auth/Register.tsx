@@ -12,7 +12,7 @@ const STEPS_AGENT = ["Basic Info", "Categories", "Documents", "Bank Details"];
 export default function Register() {
   const [role, setRoleState] = useState<"USER" | "AGENT">("USER");
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState({ email: "", password: "", name: "", address: "", pin: "", city: "", phone: "" });
+  const [form, setForm] = useState({ email: "", password: "", name: "", address: "", pin: "", city: "", phone: "", phoneCountry: "INDIA" });
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [docFiles, setDocFiles] = useState<Record<number, File>>({});
@@ -48,6 +48,11 @@ export default function Register() {
     }
   };
 
+  const handlePhoneInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.replace(/\D/g, "");
+    setForm({ ...form, phone: val });
+  };
+
   const pickCity = (name: string) => { setForm({ ...form, city: name }); setShowCitySuggestions(false); };
 
   const toggleCategory = (id: number) => {
@@ -72,7 +77,23 @@ export default function Register() {
 
   const selectedCategories = categories.filter((c) => selectedCategoryIds.includes(c.id));
   const allDocReqs = selectedCategories.flatMap((c) => c.documentRequirements);
-  const uniqueDocReqs = allDocReqs.filter((r, i) => allDocReqs.findIndex((x) => x.name === r.name) === i);
+
+  // Merge documents with same name: if ANY category requires it, mark as required
+  const uniqueDocReqs = Object.values(
+    allDocReqs.reduce((acc, req) => {
+      const key = req.name.toLowerCase();
+      if (!acc[key]) {
+        acc[key] = { ...req };
+      } else {
+        // If any category has this doc as required, make it required
+        if (req.isRequired) acc[key].isRequired = true;
+        // Keep description if current one is empty
+        if (!acc[key].description && req.description) acc[key].description = req.description;
+      }
+      return acc;
+    }, {} as Record<string, DocReq>)
+  );
+
   const requiredDocs = uniqueDocReqs.filter((r) => r.isRequired);
 
   const canProceedStep = (s: number): boolean => {
@@ -95,6 +116,7 @@ export default function Register() {
         fd.append("pin", form.pin);
         fd.append("city", form.city);
         fd.append("phone", form.phone);
+        fd.append("phoneCountry", form.phoneCountry);
         fd.append("categoryIds", JSON.stringify(selectedCategoryIds));
         fd.append("type", selectedCategories[0]?.slug || "plumber");
         Object.entries(docFiles).forEach(([reqId, file]) => { fd.append(`doc_${reqId}`, file); });
@@ -104,12 +126,12 @@ export default function Register() {
           fd.append("ifscCode", bankForm.ifscCode);
           fd.append("bankName", bankForm.bankName);
         }
-        await api.post("/auth/agent/register", fd, { headers: { "Content-Type": "multipart/form-data" } });
+        await api.post("/auth/agent/register", fd);
         toast.success("Registration submitted! You can login and check verification status.");
       } else {
         await api.post("/auth/user/register", {
           email: form.email, password: form.password, name: form.name,
-          address: form.address, pin: form.pin, city: form.city, phone: form.phone,
+          address: form.address, pin: form.pin, city: form.city, phone: form.phone, phoneCountry: form.phoneCountry,
         });
         toast.success("Registration successful! Please login.");
       }
@@ -162,10 +184,16 @@ export default function Register() {
             <input type="text" required value={form.name} onChange={set("name")} className={inputCls} placeholder="Full name" />
             <input type="email" required value={form.email} onChange={set("email")} className={inputCls} placeholder="Email address" />
             <input type="password" required value={form.password} onChange={set("password")} className={inputCls} placeholder="Password" />
-            <input type="tel" value={form.phone} onChange={set("phone")} className={inputCls} placeholder="Phone number (optional)" />
+            <div className="flex gap-2">
+              <input type="text" inputMode="numeric" value={form.phone} onChange={handlePhoneInput} className={inputCls} placeholder="Phone number (optional)" />
+              <select value={form.phoneCountry} onChange={set("phoneCountry")} className={`${inputCls} w-24 flex-shrink-0`}>
+                <option value="INDIA">🇮🇳 India</option>
+                <option value="USA">🇺🇸 USA</option>
+              </select>
+            </div>
             <input type="text" required value={form.address} onChange={set("address")} className={inputCls} placeholder="Address" />
             <div className="grid grid-cols-2 gap-2">
-              <input type="text" required value={form.pin} onChange={set("pin")} className={inputCls} placeholder="PIN code" />
+              <input type="text" inputMode="numeric" pattern="[0-9]*" required value={form.pin} onChange={(e) => { const val = e.target.value.replace(/\D/g, ""); setForm({ ...form, pin: val }); }} className={inputCls} placeholder="PIN code" />
               <CityField />
             </div>
             <button type="submit" disabled={loading}
@@ -216,10 +244,16 @@ export default function Register() {
             <input type="text" value={form.name} onChange={set("name")} className={inputCls} placeholder="Full name" />
             <input type="email" value={form.email} onChange={set("email")} className={inputCls} placeholder="Email address" />
             <input type="password" value={form.password} onChange={set("password")} className={inputCls} placeholder="Password" />
-            <input type="tel" value={form.phone} onChange={set("phone")} className={inputCls} placeholder="Phone number (optional)" />
+            <div className="flex gap-2">
+              <input type="text" inputMode="numeric" value={form.phone} onChange={handlePhoneInput} className={inputCls} placeholder="Phone number (optional)" />
+              <select value={form.phoneCountry} onChange={set("phoneCountry")} className={`${inputCls} w-24 flex-shrink-0`}>
+                <option value="INDIA">🇮🇳 India</option>
+                <option value="USA">🇺🇸 USA</option>
+              </select>
+            </div>
             <input type="text" value={form.address} onChange={set("address")} className={inputCls} placeholder="Address" />
             <div className="grid grid-cols-2 gap-2">
-              <input type="text" value={form.pin} onChange={set("pin")} className={inputCls} placeholder="PIN code" />
+              <input type="text" inputMode="numeric" pattern="[0-9]*" value={form.pin} onChange={(e) => { const val = e.target.value.replace(/\D/g, ""); setForm({ ...form, pin: val }); }} className={inputCls} placeholder="PIN code" />
               <CityField />
             </div>
           </div>

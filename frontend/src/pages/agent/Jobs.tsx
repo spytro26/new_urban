@@ -52,7 +52,7 @@ export default function AgentJobs() {
   }, [statusFilter]);
 
   return (
-    <div className="px-4 lg:px-6 py-4">
+    <div className="px-4 lg:px-6 py-4 pb-20 md:pb-6">
       <div className="flex items-center justify-between mb-3">
         <h1 className="text-lg font-semibold text-gray-900">My Jobs</h1>
         <button onClick={handleRefresh} disabled={refreshing || cooldownLeft > 0}

@@ -49,11 +49,12 @@ enum documentStatus {
 }
 
 model User {
-  id       Int     @id @default(autoincrement())
-  name     String?
-  email    String  @unique
-  password String
-  phone    String?
+  id           Int     @id @default(autoincrement())
+  name         String?
+  email        String  @unique
+  password     String
+  phone        String?
+  phoneCountry String  @default("INDIA") // "USA" or "INDIA"
 
   order         OrderGroup[]
   profilepic    String?
@@ -103,6 +104,8 @@ model Agent {
   rating         Float?              @default(0)
   ratingCount    Int                 @default(0)
   password       String
+  phone          String?
+  phoneCountry   String              @default("INDIA") // "USA" or "INDIA"
   orders         OrderGroup[]
   bankDetails    bankDetails?
   extraMaterials extraMaterial[]
@@ -315,6 +318,28 @@ model City {
   state     String?
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
+}
+
+// ── Site Settings (contact info, FAQs) ─────────────────────────────────
+model SiteSettings {
+  id    Int    @id @default(autoincrement())
+  key   String @unique // e.g. "contact_phone", "contact_email", "contact_address"
+  value String // the actual value
+  label String? // optional display label
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FAQ {
+  id       Int     @id @default(autoincrement())
+  question String
+  answer   String
+  order    Int     @default(0) // for sorting
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ── Monthly agent settlement / payout tracking ─────────────────────────

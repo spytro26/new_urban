@@ -25,7 +25,7 @@ export default function Notifications() {
   if (loading) return <div className="flex items-center justify-center h-32"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400" /></div>;
 
   return (
-    <div className="px-4 lg:px-6 py-4">
+    <div className="px-4 lg:px-6 py-4 pb-20 md:pb-6">
       <div className="flex justify-between items-center mb-3">
         <h1 className="text-lg font-semibold text-gray-900">Notifications</h1>
         {notifications.some((n) => !n.isRead) && (

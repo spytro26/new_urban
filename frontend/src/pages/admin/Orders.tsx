@@ -128,18 +128,23 @@ export default function AdminOrders() {
     return categories[0] || null;
   };
 
-  // Filter agents by service category + availability, then sort by pincode match
+  // Filter agents by service category (verified) + availability, then sort by pincode match
   const getFilteredSortedAgents = (order: any) => {
     const orderCategory = getOrderCategory(order);
     const orderPin = order.addressUser?.pin;
     const orderCity = order.addressUser?.city;
 
-    let available = agents.filter((a) => a.isAvailable);
+    // Only show available and verified agents
+    let available = agents.filter((a) => a.isAvailable && a.isVerified);
 
-    // Filter by type matching the order category
+    // Filter by agents who are VERIFIED for the order's category
     if (orderCategory) {
-      const cat = orderCategory.toLowerCase(); // "plumber" | "electrician"
-      available = available.filter((a) => a.type?.toLowerCase() === cat);
+      const cat = orderCategory.toLowerCase();
+      available = available.filter((a) =>
+        a.categories?.some(
+          (ac: any) => ac.isVerified && ac.category?.slug?.toLowerCase() === cat
+        )
+      );
     }
 
     // Sort: same pin first, then same city, then by rating
@@ -172,7 +177,7 @@ export default function AdminOrders() {
   };
 
   return (
-    <div className="px-4 lg:px-6 py-4">
+    <div className="px-4 lg:px-6 py-4 pb-20 md:pb-6">
       <div className="flex items-center justify-between mb-3">
         <h1 className="text-lg font-semibold text-gray-900">All Orders</h1>
         <button onClick={handleRefresh} disabled={refreshing || cooldownLeft > 0}
@@ -369,6 +374,7 @@ export default function AdminOrders() {
                                   </div>
                                   <div className="min-w-0">
                                     <p className="font-medium text-gray-900 text-xs truncate">{agent.name}</p>
+                                    <p className="text-[10px] text-gray-500 truncate">{agent.email}</p>
                                     <span className={`inline-block text-[10px] px-1 py-0.5 rounded ${
                                       agent.type === "plumber" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
                                     }`}>

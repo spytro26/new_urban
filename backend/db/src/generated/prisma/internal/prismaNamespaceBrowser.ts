@@ -68,6 +68,8 @@ export const ModelName = {
   Payment: 'Payment',
   notification: 'notification',
   City: 'City',
+  SiteSettings: 'SiteSettings',
+  FAQ: 'FAQ',
   MonthlySettlement: 'MonthlySettlement'
 } as const
 
@@ -93,6 +95,7 @@ export const UserScalarFieldEnum = {
   email: 'email',
   password: 'password',
   phone: 'phone',
+  phoneCountry: 'phoneCountry',
   profilepic: 'profilepic',
   createdAt: 'createdAt'
 } as const
@@ -137,6 +140,8 @@ export const AgentScalarFieldEnum = {
   rating: 'rating',
   ratingCount: 'ratingCount',
   password: 'password',
+  phone: 'phone',
+  phoneCountry: 'phoneCountry',
   profilepic: 'profilepic',
   id_proof: 'id_proof',
   address_proof: 'address_proof',
@@ -312,6 +317,31 @@ export const CityScalarFieldEnum = {
 } as const
 
 export type CityScalarFieldEnum = (typeof CityScalarFieldEnum)[keyof typeof CityScalarFieldEnum]
+
+
+export const SiteSettingsScalarFieldEnum = {
+  id: 'id',
+  key: 'key',
+  value: 'value',
+  label: 'label',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type SiteSettingsScalarFieldEnum = (typeof SiteSettingsScalarFieldEnum)[keyof typeof SiteSettingsScalarFieldEnum]
+
+
+export const FAQScalarFieldEnum = {
+  id: 'id',
+  question: 'question',
+  answer: 'answer',
+  order: 'order',
+  isActive: 'isActive',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type FAQScalarFieldEnum = (typeof FAQScalarFieldEnum)[keyof typeof FAQScalarFieldEnum]
 
 
 export const MonthlySettlementScalarFieldEnum = {

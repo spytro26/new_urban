@@ -1,13 +1,11 @@
 import { useAuth } from "../context/AuthContext";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { LogOut, Menu, X } from "lucide-react";
-import { useState } from "react";
+import { LogOut } from "lucide-react";
 
 export default function Navbar() {
   const { user, role, logout, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -21,6 +19,7 @@ export default function Navbar() {
       { label: "Home", to: "/user/home" },
       { label: "Profile", to: "/user/profile" },
       { label: "Notifications", to: "/user/notifications" },
+      { label: "Contact Us", to: "/user/contact" },
     ];
     if (role === "AGENT") return [
       { label: "Dashboard", to: "/agent/dashboard" },
@@ -28,6 +27,7 @@ export default function Navbar() {
       { label: "Notifications", to: "/agent/notifications" },
       { label: "Earnings", to: "/agent/earnings" },
       { label: "Profile", to: "/agent/profile" },
+      { label: "Contact Us", to: "/agent/contact" },
     ];
     if (role === "ADMIN") return [
       { label: "Dashboard", to: "/admin/dashboard" },
@@ -37,6 +37,7 @@ export default function Navbar() {
       { label: "Cities", to: "/admin/cities" },
       { label: "Services", to: "/admin/subservices" },
       { label: "Settlements", to: "/admin/settlements" },
+      { label: "Settings", to: "/admin/settings" },
     ];
     return [];
   })();
@@ -53,7 +54,7 @@ export default function Navbar() {
               </span>
             </div>
 
-            {/* Desktop nav */}
+            {/* Desktop nav - hidden on mobile */}
             <div className="hidden md:flex items-center gap-0.5">
               {links.map((l) => (
                 <Link
@@ -71,6 +72,7 @@ export default function Navbar() {
             </div>
           </div>
 
+          {/* Desktop user info */}
           <div className="hidden md:flex items-center gap-3">
             <span className="text-xs text-gray-400">{user?.email}</span>
             <button
@@ -81,43 +83,15 @@ export default function Navbar() {
             </button>
           </div>
 
-          {/* Mobile menu toggle */}
-          <button className="md:hidden p-1" onClick={() => setMenuOpen(!menuOpen)}>
-            {menuOpen ? <X size={20} /> : <Menu size={20} />}
+          {/* Mobile logout button */}
+          <button
+            onClick={handleLogout}
+            className="md:hidden flex items-center gap-1 text-xs text-gray-500 hover:text-red-600 transition-colors px-2 py-1 rounded hover:bg-red-50"
+          >
+            <LogOut size={16} />
           </button>
         </div>
       </div>
-
-      {/* Mobile menu */}
-      {menuOpen && (
-        <div className="md:hidden border-t border-gray-100 bg-white">
-          <div className="px-3 py-2 space-y-0.5">
-            {links.map((l) => (
-              <Link
-                key={l.to}
-                to={l.to}
-                onClick={() => setMenuOpen(false)}
-                className={`block px-3 py-2 rounded-md text-sm font-medium ${
-                  location.pathname === l.to
-                    ? "bg-gray-900 text-white"
-                    : "text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                {l.label}
-              </Link>
-            ))}
-            <div className="pt-2 mt-2 border-t border-gray-100">
-              <p className="px-3 py-1 text-xs text-gray-400">{user?.email}</p>
-              <button
-                onClick={handleLogout}
-                className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </nav>
   );
 }

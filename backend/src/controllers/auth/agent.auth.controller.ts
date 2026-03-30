@@ -37,6 +37,8 @@ export async function registerAgent(
     address?: string;
     pin?: string;
     city?: string;
+    phone?: string;
+    phoneCountry?: string;
     profilepic?: string;
     accountNumber?: string;
     holderName?: string;
@@ -52,6 +54,8 @@ export async function registerAgent(
     address,
     pin,
     city,
+    phone,
+    phoneCountry,
     profilepic,
     accountNumber,
     holderName,
@@ -155,12 +159,20 @@ export async function registerAgent(
     if (cat) categoryIds = [cat.id];
   }
 
+  // Format phone number with country code
+  let formattedPhone: string | undefined;
+  if (phone) {
+    const countryCode = phoneCountry === "USA" ? "+1" : "+91";
+    formattedPhone = `${countryCode}${phone}`;
+  }
+
   const agent = await prisma.agent.create({
     data: {
       email,
       password: hashedPassword,
       name,
       type: (type ?? categoryIds.length > 0) ? (type ?? "multi") : "general",
+      ...(formattedPhone && { phone: formattedPhone }),
       ...(profilepic && { profilepic }),
       ...(docUrls.get("doc_id_proof") && {
         id_proof: docUrls.get("doc_id_proof"),

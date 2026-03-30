@@ -53,7 +53,7 @@ export default function AgentNotifications() {
   };
 
   return (
-    <div className="px-4 lg:px-6 py-4">
+    <div className="px-4 lg:px-6 py-4 pb-20 md:pb-6">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-lg font-semibold text-gray-900">Notifications</h1>

@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import { pool } from "./db";
+import { pool, prisma } from "./db";
 import authRoutes from "./src/routes/auth.routes";
 import uploadRoutes from "./src/routes/upload.routes";
 import userRouter from "./src/routes/user.routes";
@@ -78,6 +78,33 @@ app.use("/api/upload", uploadLimiter, uploadRoutes);
 app.use("/api/users", userRouter);
 app.use("/api/agents", agentRouter);
 app.use("/api/admin", adminRouter);
+
+// ─── Public Routes (no auth) ──────────────────────────────────────────
+app.get("/api/public/settings", async (_req, res) => {
+  try {
+    const settings = await prisma.siteSettings.findMany();
+    const settingsMap: Record<string, string> = {};
+    for (const s of settings) {
+      settingsMap[s.key] = s.value;
+    }
+    res.json({ settings: settingsMap });
+  } catch {
+    res.status(500).json({ error: "Something went wrong" });
+  }
+});
+
+app.get("/api/public/faqs", async (_req, res) => {
+  try {
+    const faqs = await prisma.fAQ.findMany({
+      where: { isActive: true },
+      orderBy: { order: "asc" },
+      select: { id: true, question: true, answer: true },
+    });
+    res.json({ faqs });
+  } catch {
+    res.status(500).json({ error: "Something went wrong" });
+  }
+});
 
 app.listen(3000, () => {
   console.log(`Server running on port ${env.PORT}`);

@@ -100,7 +100,7 @@ export default function UserProfile() {
   if (loading) return <div className="flex items-center justify-center h-32"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400" /></div>;
 
   return (
-    <div className="px-4 lg:px-6 py-4">
+    <div className="px-4 lg:px-6 py-4 pb-20 md:pb-6">
       {/* Header */}
       <div className="bg-white border border-gray-200 rounded-lg p-4 mb-3">
         <div className="flex items-center gap-3">

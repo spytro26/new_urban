@@ -1357,4 +1357,134 @@ router.get("/reports/monthly/download", async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════
+//  SITE SETTINGS CRUD
+// ═══════════════════════════════════════════════════════════════════════
+
+router.get("/settings", async (_req, res) => {
+  try {
+    const settings = await prisma.siteSettings.findMany({
+      orderBy: { key: "asc" },
+    });
+    res.json({ settings });
+  } catch {
+    res.status(500).json({ error: "Something went wrong" });
+  }
+});
+
+router.post("/settings", async (req, res) => {
+  try {
+    const { key, value, label } = req.body as {
+      key?: string;
+      value?: string;
+      label?: string;
+    };
+    if (!key || !value) {
+      return res.status(400).json({ error: "key and value are required" });
+    }
+
+    const setting = await prisma.siteSettings.upsert({
+      where: { key },
+      update: { value, label: label ?? null },
+      create: { key, value, label: label ?? null },
+    });
+
+    res.json({ setting });
+  } catch {
+    res.status(500).json({ error: "Something went wrong" });
+  }
+});
+
+router.delete("/settings/:key", async (req, res) => {
+  try {
+    const { key } = req.params;
+    await prisma.siteSettings.delete({ where: { key } });
+    res.json({ deleted: true });
+  } catch {
+    res.status(500).json({ error: "Setting not found or already deleted" });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+//  FAQ CRUD
+// ═══════════════════════════════════════════════════════════════════════
+
+router.get("/faqs", async (_req, res) => {
+  try {
+    const faqs = await prisma.fAQ.findMany({
+      orderBy: { order: "asc" },
+    });
+    res.json({ faqs });
+  } catch {
+    res.status(500).json({ error: "Something went wrong" });
+  }
+});
+
+router.post("/faqs", async (req, res) => {
+  try {
+    const { question, answer, order, isActive } = req.body as {
+      question?: string;
+      answer?: string;
+      order?: number;
+      isActive?: boolean;
+    };
+    if (!question || !answer) {
+      return res.status(400).json({ error: "question and answer are required" });
+    }
+
+    const faq = await prisma.fAQ.create({
+      data: {
+        question,
+        answer,
+        order: order ?? 0,
+        isActive: isActive ?? true,
+      },
+    });
+
+    res.status(201).json({ faq });
+  } catch {
+    res.status(500).json({ error: "Something went wrong" });
+  }
+});
+
+router.put("/faqs/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "invalid faq id" });
+
+    const { question, answer, order, isActive } = req.body as {
+      question?: string;
+      answer?: string;
+      order?: number;
+      isActive?: boolean;
+    };
+
+    const faq = await prisma.fAQ.update({
+      where: { id },
+      data: {
+        ...(question && { question }),
+        ...(answer && { answer }),
+        ...(order !== undefined && { order }),
+        ...(isActive !== undefined && { isActive }),
+      },
+    });
+
+    res.json({ faq });
+  } catch {
+    res.status(500).json({ error: "FAQ not found" });
+  }
+});
+
+router.delete("/faqs/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "invalid faq id" });
+
+    await prisma.fAQ.delete({ where: { id } });
+    res.json({ deleted: true });
+  } catch {
+    res.status(500).json({ error: "FAQ not found or already deleted" });
+  }
+});
+
 export default router;

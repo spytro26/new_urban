@@ -63,7 +63,7 @@ export default function AdminSettlements() {
   };
 
   return (
-    <div className="px-4 lg:px-6 py-4">
+    <div className="px-4 lg:px-6 py-4 pb-20 md:pb-6">
       <h1 className="text-lg font-semibold text-gray-900 mb-3">Settlements & Reports</h1>
 
       <div className="flex flex-wrap gap-2 mb-4 items-center">
@@ -103,36 +103,51 @@ export default function AdminSettlements() {
 
           {report?.agents?.length === 0 ? (
             <p className="text-gray-400 text-center py-6 bg-white rounded-lg border text-sm">No completed orders this month</p>
-          ) : (
+          ) : (() => {
+            const hasCarryOver = report?.agents?.some((a: any) => a.carryOver > 0);
+            const headers = ["Agent", "Orders", "Service", "Material", "Total", "Commission (5%)", "COD", "Online", "To Send"];
+            if (hasCarryOver) headers.push("Carry");
+            return (
             <div className="overflow-x-auto rounded-lg border border-gray-200">
               <table className="w-full bg-white">
                 <thead className="bg-gray-50">
                   <tr>
-                    {["Agent", "Orders", "Earnings", "Commission", "COD", "Online", "To Send", "Carry"].map((h) => (
+                    {headers.map((h) => (
                       <th key={h} className="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {report?.agents?.map((a: any) => (
+                  {report?.agents?.map((a: any) => {
+                    const matPay = a.materialCodCollected > 0 && a.materialOnlineCollected > 0
+                      ? `COD: ₹${a.materialCodCollected}, Online: ₹${a.materialOnlineCollected}`
+                      : a.materialCodCollected > 0 ? "COD" : a.materialOnlineCollected > 0 ? "Online" : "";
+                    return (
                     <tr key={a.agentId} className="hover:bg-gray-50">
                       <td className="px-3 py-2">
                         <p className="font-medium text-xs">{a.name}</p>
                         <p className="text-[11px] text-gray-400">{a.email}</p>
                       </td>
                       <td className="px-3 py-2 text-xs">{a.orderCount}</td>
+                      <td className="px-3 py-2 text-xs">₹{(a.serviceEarnings ?? 0).toFixed(0)}</td>
+                      <td className="px-3 py-2 text-xs">
+                        ₹{(a.extraEarnings ?? 0).toFixed(0)}
+                        {matPay && <span className="text-[10px] text-amber-700 font-medium block">(Material: {matPay})</span>}
+                      </td>
                       <td className="px-3 py-2 text-xs font-medium">₹{a.totalEarnings.toFixed(0)}</td>
                       <td className="px-3 py-2 text-xs text-red-600">₹{a.commission.toFixed(0)}</td>
-                      <td className="px-3 py-2 text-xs">₹{a.codCollected.toFixed(0)}</td>
-                      <td className="px-3 py-2 text-xs">₹{a.onlineCollected.toFixed(0)}</td>
+                      <td className="px-3 py-2 text-xs font-semibold text-amber-700">₹{a.codCollected.toFixed(0)}</td>
+                      <td className="px-3 py-2 text-xs text-blue-600">₹{a.onlineCollected.toFixed(0)}</td>
                       <td className="px-3 py-2 text-xs font-bold text-green-600">₹{a.amountToSend.toFixed(0)}</td>
-                      <td className="px-3 py-2 text-xs text-orange-600">₹{a.carryOver.toFixed(0)}</td>
+                      {hasCarryOver && <td className="px-3 py-2 text-xs text-orange-600">₹{a.carryOver.toFixed(0)}</td>}
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
-          )}
+            );
+          })()}
         </div>
       ) : (
         <div>
@@ -145,21 +160,29 @@ export default function AdminSettlements() {
 
           {settlements.length === 0 ? (
             <p className="text-gray-400 text-center py-6 bg-white rounded-lg border text-sm">No settlements. Generate them first.</p>
-          ) : (
+          ) : (() => {
+            const hasCarryOver = settlements.some((s) => s.carryOver > 0);
+            return (
             <div className="grid gap-2 md:grid-cols-2">
-              {settlements.map((s) => (
+              {settlements.map((s) => {
+                const matPay = s.materialCodCollected > 0 && s.materialOnlineCollected > 0
+                  ? `COD: ₹${s.materialCodCollected?.toFixed(0)}, Online: ₹${s.materialOnlineCollected?.toFixed(0)}`
+                  : s.materialCodCollected > 0 ? "COD" : s.materialOnlineCollected > 0 ? "Online" : "";
+                return (
                 <div key={s.id} className={`bg-white border rounded-lg p-3 ${s.settled ? "border-green-200" : "border-gray-200"}`}>
                   <div className="flex justify-between items-start">
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-sm">{s.agent?.name}</p>
                       <p className="text-xs text-gray-400 truncate">{s.agent?.email}</p>
                       <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 mt-2 text-xs">
-                        <p className="text-gray-500">Earnings: <span className="font-medium text-gray-900">₹{s.totalEarnings.toFixed(0)}</span></p>
+                        <p className="text-gray-500">Service: <span className="font-medium text-gray-900">₹{(s.serviceEarnings ?? 0).toFixed(0)}</span></p>
+                        <p className="text-gray-500">Material: <span className="font-medium text-gray-900">₹{(s.extraEarnings ?? 0).toFixed(0)}</span>{matPay && <span className="text-[10px] text-amber-700 font-medium"> ({matPay})</span>}</p>
+                        <p className="text-gray-500">Total: <span className="font-medium text-gray-900">₹{s.totalEarnings.toFixed(0)}</span></p>
                         <p className="text-gray-500">Commission: <span className="font-medium text-red-600">₹{s.commission.toFixed(0)}</span></p>
-                        <p className="text-gray-500">COD: <span className="font-medium">₹{s.codCollected.toFixed(0)}</span></p>
-                        <p className="text-gray-500">Online: <span className="font-medium">₹{s.onlineCollected.toFixed(0)}</span></p>
+                        <p className="text-gray-500">COD: <span className="font-semibold text-amber-700">₹{s.codCollected.toFixed(0)}</span></p>
+                        <p className="text-gray-500">Online: <span className="font-medium text-blue-600">₹{s.onlineCollected.toFixed(0)}</span></p>
                         <p className="text-gray-500">To Send: <span className="font-bold text-green-600">₹{s.amountToSend.toFixed(0)}</span></p>
-                        <p className="text-gray-500">Carry: <span className="font-medium text-orange-600">₹{s.carryOver.toFixed(0)}</span></p>
+                        {hasCarryOver && <p className="text-gray-500">Carry: <span className="font-medium text-orange-600">₹{s.carryOver.toFixed(0)}</span></p>}
                         {s.previousCarry > 0 && (
                           <p className="text-gray-500">Prev: <span className="font-medium text-red-600">₹{s.previousCarry.toFixed(0)}</span></p>
                         )}
@@ -179,9 +202,11 @@ export default function AdminSettlements() {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
-          )}
+            );
+          })()}
         </div>
       )}
     </div>

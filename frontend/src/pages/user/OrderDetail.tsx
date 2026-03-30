@@ -88,7 +88,7 @@ export default function OrderDetail() {
   if (!order) return <div className="text-center py-8 text-gray-400 text-sm">Order not found</div>;
 
   return (
-    <div className="px-4 lg:px-6 py-4">
+    <div className="px-4 lg:px-6 py-4 pb-20 md:pb-6">
       <Link to="/user/home" className="inline-flex items-center gap-1.5 text-gray-500 hover:text-gray-900 text-xs mb-3">
         <ArrowLeft size={14} /> Back
       </Link>

@@ -19,7 +19,7 @@ export default function AgentEarnings() {
   const fmt2 = (v: number | undefined | null) => `₹${(v ?? 0).toFixed(2)}`;
 
   return (
-    <div className="px-4 lg:px-6 py-4">
+    <div className="px-4 lg:px-6 py-4 pb-20 md:pb-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-lg font-semibold text-gray-900">Earnings</h1>
         <div className="flex gap-2">

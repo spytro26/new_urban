@@ -125,6 +125,16 @@ export type notification = Prisma.notificationModel
  */
 export type City = Prisma.CityModel
 /**
+ * Model SiteSettings
+ * 
+ */
+export type SiteSettings = Prisma.SiteSettingsModel
+/**
+ * Model FAQ
+ * 
+ */
+export type FAQ = Prisma.FAQModel
+/**
  * Model MonthlySettlement
  * 
  */

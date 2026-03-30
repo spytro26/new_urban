@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Navbar from "./components/Navbar";
+import BottomNav from "./components/BottomNav";
 
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
@@ -27,6 +28,10 @@ import AdminOrders from "./pages/admin/Orders";
 import AdminAgents from "./pages/admin/Agents";
 import AdminCategories from "./pages/admin/Categories";
 import AdminSettlements from "./pages/admin/Settlements";
+import AdminSettings from "./pages/admin/Settings";
+import AdminMore from "./pages/admin/More";
+
+import ContactUs from "./pages/shared/ContactUs";
 
 function RoleRedirect() {
   const { role } = useAuth();
@@ -40,7 +45,8 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-gray-50/80">
       <Navbar />
-      <main className="pb-6">{children}</main>
+      <main className="pb-20 md:pb-6">{children}</main>
+      <BottomNav />
     </div>
   );
 }
@@ -64,6 +70,7 @@ export default function App() {
         <Route path="/user/orders/:orderId" element={<ProtectedRoute role="USER"><AppLayout><OrderDetail /></AppLayout></ProtectedRoute>} />
         <Route path="/user/profile" element={<ProtectedRoute role="USER"><AppLayout><UserProfile /></AppLayout></ProtectedRoute>} />
         <Route path="/user/notifications" element={<ProtectedRoute role="USER"><AppLayout><Notifications /></AppLayout></ProtectedRoute>} />
+        <Route path="/user/contact" element={<ProtectedRoute role="USER"><AppLayout><ContactUs /></AppLayout></ProtectedRoute>} />
 
         {/* Agent routes */}
         <Route path="/agent/dashboard" element={<ProtectedRoute role="AGENT"><AppLayout><AgentDashboard /></AppLayout></ProtectedRoute>} />
@@ -72,6 +79,7 @@ export default function App() {
         <Route path="/agent/profile" element={<ProtectedRoute role="AGENT"><AppLayout><AgentProfile /></AppLayout></ProtectedRoute>} />
         <Route path="/agent/earnings" element={<ProtectedRoute role="AGENT"><AppLayout><AgentEarnings /></AppLayout></ProtectedRoute>} />
         <Route path="/agent/notifications" element={<ProtectedRoute role="AGENT"><AppLayout><AgentNotifications /></AppLayout></ProtectedRoute>} />
+        <Route path="/agent/contact" element={<ProtectedRoute role="AGENT"><AppLayout><ContactUs /></AppLayout></ProtectedRoute>} />
 
         {/* Admin routes */}
         <Route path="/admin/dashboard" element={<ProtectedRoute role="ADMIN"><AppLayout><AdminDashboard /></AppLayout></ProtectedRoute>} />
@@ -81,6 +89,8 @@ export default function App() {
         <Route path="/admin/agents" element={<ProtectedRoute role="ADMIN"><AppLayout><AdminAgents /></AppLayout></ProtectedRoute>} />
         <Route path="/admin/categories" element={<ProtectedRoute role="ADMIN"><AppLayout><AdminCategories /></AppLayout></ProtectedRoute>} />
         <Route path="/admin/settlements" element={<ProtectedRoute role="ADMIN"><AppLayout><AdminSettlements /></AppLayout></ProtectedRoute>} />
+        <Route path="/admin/settings" element={<ProtectedRoute role="ADMIN"><AppLayout><AdminSettings /></AppLayout></ProtectedRoute>} />
+        <Route path="/admin/more" element={<ProtectedRoute role="ADMIN"><AppLayout><AdminMore /></AppLayout></ProtectedRoute>} />
 
         {/* Catch all */}
         <Route path="*" element={<Navigate to="/" replace />} />

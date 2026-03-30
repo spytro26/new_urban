@@ -39,7 +39,7 @@ export default function AdminDashboard() {
   ];
 
   return (
-    <div className="px-4 lg:px-6 py-4">
+    <div className="px-4 lg:px-6 py-4 pb-20 md:pb-6">
       <h1 className="text-lg font-semibold text-gray-900 mb-4">Dashboard</h1>
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">

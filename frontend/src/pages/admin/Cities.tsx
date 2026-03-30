@@ -104,7 +104,7 @@ export default function AdminCities() {
   };
 
   return (
-    <div className="px-4 lg:px-6 py-4">
+    <div className="px-4 lg:px-6 py-4 pb-20 md:pb-6">
       <h1 className="text-lg font-semibold text-gray-900 mb-4">Manage Cities</h1>
 
       <div className="bg-white border border-gray-200 rounded-lg p-3 mb-4 relative">
