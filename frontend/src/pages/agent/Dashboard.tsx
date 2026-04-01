@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import api from "../../api";
 import toast from "react-hot-toast";
 import { Briefcase, CheckCircle, Clock, WifiOff, ShieldCheck, ArrowRight, RefreshCw, Upload, XCircle } from "lucide-react";
@@ -14,6 +14,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default function AgentDashboard() {
+  const navigate = useNavigate();
   const [pendingJobs, setPendingJobs] = useState<any[]>([]);
   const [activeJobs, setActiveJobs] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
@@ -64,11 +65,40 @@ export default function AgentDashboard() {
       api.get("/agents/categories"),
       api.get("/agents/notifications"),
     ]).then(([p, ot, ip, pr, cats, notifs]) => {
+      const agentProfile = pr.data.agent;
+      const agentCategories = cats.data.categories || [];
+      const agentDocuments = cats.data.documents || [];
+
+      // Check for incomplete onboarding: no categories selected
+      if (!agentCategories || agentCategories.length === 0) {
+        toast("Let's finish setting up your profile!", { icon: "📋" });
+        navigate("/register", { state: { resumeStep: 1 } });
+        return;
+      }
+
+      // Check for incomplete onboarding: missing required documents
+      const requiredReqIds = new Set<number>();
+      for (const ac of agentCategories) {
+        const reqs = ac.category?.documentRequirements ?? [];
+        for (const req of reqs) {
+          if (req.isRequired) requiredReqIds.add(req.id);
+        }
+      }
+      const uploadedReqIds = new Set<number>(
+        agentDocuments.filter((d: any) => d.status !== "REJECTED").map((d: any) => d.requirementId)
+      );
+      const missingDocs = [...requiredReqIds].some((id) => !uploadedReqIds.has(id));
+      if (missingDocs) {
+        toast("Please upload required documents to continue", { icon: "📋" });
+        navigate("/register", { state: { resumeStep: 2 } });
+        return;
+      }
+
       setPendingJobs(p.data.jobs);
       setActiveJobs([...ot.data.jobs, ...ip.data.jobs]);
-      setProfile(pr.data.agent);
-      setCategories(cats.data.categories || []);
-      setDocuments(cats.data.documents || []);
+      setProfile(agentProfile);
+      setCategories(agentCategories);
+      setDocuments(agentDocuments);
       setNotifications((notifs.data.notifications || []).slice(0, 4));
       setLoading(false);
     }).catch(() => setLoading(false));

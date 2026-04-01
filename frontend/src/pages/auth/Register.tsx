@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import api from "../../api";
 import toast from "react-hot-toast";
+import { useAuth } from "../../context/AuthContext";
 import { Camera, X, ChevronRight, ChevronLeft, Check } from "lucide-react";
 
 type Category = { id: number; name: string; slug: string; documentRequirements: DocReq[] };
@@ -10,25 +11,58 @@ type DocReq = { id: number; name: string; description: string | null; isRequired
 const STEPS_AGENT = ["Basic Info", "Categories", "Documents", "Bank Details"];
 
 export default function Register() {
-  const [role, setRoleState] = useState<"USER" | "AGENT">("USER");
-  const [step, setStep] = useState(0);
+  const { login, token, role: authRole } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // If an agent is already authenticated (resumed from login), start at the right step
+  const resumeStep = (location.state as any)?.resumeStep ?? 0;
+  const isResuming = !!(location.state as any)?.resumeStep;
+
+  const [role, setRoleState] = useState<"USER" | "AGENT">(
+    isResuming || (authRole === "AGENT" && token) ? "AGENT" : "USER"
+  );
+  const [step, setStep] = useState<number>(isResuming ? resumeStep : 0);
   const [form, setForm] = useState({ email: "", password: "", name: "", address: "", pin: "", city: "", phone: "", phoneCountry: "INDIA" });
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [docFiles, setDocFiles] = useState<Record<number, File>>({});
   const [docPreviews, setDocPreviews] = useState<Record<number, string>>({});
+  const [alreadyUploadedReqIds, setAlreadyUploadedReqIds] = useState<Set<number>>(new Set());
   const [bankForm, setBankForm] = useState({ accountNumber: "", holderName: "", ifscCode: "", bankName: "" });
   const [loading, setLoading] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [cities, setCities] = useState<{ id: number; name: string; state: string | null }[]>([]);
   const [citySuggestions, setCitySuggestions] = useState<typeof cities>([]);
   const [showCitySuggestions, setShowCitySuggestions] = useState(false);
   const cityRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
 
   useEffect(() => {
     api.get("/auth/cities/active").then((r) => setCities(r.data.cities)).catch(() => {});
     api.get("/auth/categories/active").then((r) => setCategories(r.data.categories)).catch(() => {});
   }, []);
+
+  // When resuming, fetch profile to get current categories & uploaded docs
+  useEffect(() => {
+    if (!isResuming) return;
+    setProfileLoading(true);
+    api.get("/agents/profile")
+      .then((res) => {
+        const agent = res.data.agent;
+        // Restore selected category IDs so uniqueDocReqs computes correctly
+        const catIds = (agent.categories ?? []).map((ac: any) => ac.categoryId);
+        setSelectedCategoryIds(catIds);
+        // Track already-uploaded docs so UI shows them as satisfied
+        const uploadedIds = new Set<number>(
+          (agent.documents ?? [])
+            .filter((d: any) => d.status !== "REJECTED")
+            .map((d: any) => d.requirementId as number)
+        );
+        setAlreadyUploadedReqIds(uploadedIds);
+      })
+      .catch(() => {})
+      .finally(() => setProfileLoading(false));
+  }, [isResuming]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -78,16 +112,14 @@ export default function Register() {
   const selectedCategories = categories.filter((c) => selectedCategoryIds.includes(c.id));
   const allDocReqs = selectedCategories.flatMap((c) => c.documentRequirements);
 
-  // Merge documents with same name: if ANY category requires it, mark as required
+  // Merge documents with same name
   const uniqueDocReqs = Object.values(
     allDocReqs.reduce((acc, req) => {
       const key = req.name.toLowerCase();
       if (!acc[key]) {
         acc[key] = { ...req };
       } else {
-        // If any category has this doc as required, make it required
         if (req.isRequired) acc[key].isRequired = true;
-        // Keep description if current one is empty
         if (!acc[key].description && req.description) acc[key].description = req.description;
       }
       return acc;
@@ -99,42 +131,107 @@ export default function Register() {
   const canProceedStep = (s: number): boolean => {
     if (s === 0) return !!form.name && !!form.email && !!form.password && !!form.address && !!form.pin && !!form.city;
     if (s === 1) return selectedCategoryIds.length > 0;
-    if (s === 2) return requiredDocs.every((r) => docFiles[r.id]);
+    // A required doc is satisfied if it's newly uploaded OR already on the server
+    if (s === 2) return requiredDocs.every((r) => docFiles[r.id] || alreadyUploadedReqIds.has(r.id));
     return true;
   };
 
-  const handleSubmit = async (e?: React.FormEvent) => {
-    e?.preventDefault();
+  // ─── STEP 0: Validate locally, no API call ───────────────────────────────
+  const handleStep0 = () => {
+    if (!canProceedStep(0)) return;
+    setStep(1);
+  };
+
+  // ─── STEP 1: Create the account with basic info + categories ─────────────
+  // For resumed sessions (already authenticated), just save categories.
+  const handleStep1 = async () => {
+    if (!canProceedStep(1)) return;
     setLoading(true);
     try {
-      if (role === "AGENT") {
-        const fd = new FormData();
-        fd.append("email", form.email);
-        fd.append("password", form.password);
-        fd.append("name", form.name);
-        fd.append("address", form.address);
-        fd.append("pin", form.pin);
-        fd.append("city", form.city);
-        fd.append("phone", form.phone);
-        fd.append("phoneCountry", form.phoneCountry);
-        fd.append("categoryIds", JSON.stringify(selectedCategoryIds));
-        fd.append("type", selectedCategories[0]?.slug || "plumber");
-        Object.entries(docFiles).forEach(([reqId, file]) => { fd.append(`doc_${reqId}`, file); });
-        if (bankForm.accountNumber) {
-          fd.append("accountNumber", bankForm.accountNumber);
-          fd.append("holderName", bankForm.holderName);
-          fd.append("ifscCode", bankForm.ifscCode);
-          fd.append("bankName", bankForm.bankName);
-        }
-        await api.post("/auth/agent/register", fd);
-        toast.success("Registration submitted! You can login and check verification status.");
+      if (isResuming) {
+        // Agent already exists — just update categories
+        await api.post("/agents/categories/save", { categoryIds: selectedCategoryIds });
+        toast.success("Categories saved! Now upload your documents.");
       } else {
-        await api.post("/auth/user/register", {
-          email: form.email, password: form.password, name: form.name,
-          address: form.address, pin: form.pin, city: form.city, phone: form.phone, phoneCountry: form.phoneCountry,
-        });
-        toast.success("Registration successful! Please login.");
+        // Fresh registration — create the account now with basic info + categories
+        const formData = new FormData();
+        formData.append("email", form.email);
+        formData.append("password", form.password);
+        formData.append("name", form.name);
+        formData.append("address", form.address);
+        formData.append("pin", form.pin);
+        formData.append("city", form.city);
+        formData.append("phone", form.phone);
+        formData.append("phoneCountry", form.phoneCountry);
+        formData.append("type", "general");
+        formData.append("categoryIds", JSON.stringify(selectedCategoryIds));
+        const res = await api.post("/auth/agent/register", formData);
+        const data = res.data;
+        // Log in immediately — every subsequent API call is authenticated
+        login(data.token, { ...data.agent, role: "AGENT" }, "AGENT");
+        toast.success("Account created! Now upload your documents.");
       }
+      setStep(2);
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.response?.data?.error || "Failed";
+      if (err.response?.status === 409) {
+        toast.error("Email already registered. Please login to continue your setup.");
+        navigate("/login", { state: { hint: "agent" } });
+      } else {
+        toast.error(msg);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ─── STEP 2: Upload documents one by one ─────────────────────────────────
+  const handleStep2 = async () => {
+    if (!canProceedStep(2)) return;
+    setLoading(true);
+    try {
+      const entries = Object.entries(docFiles);
+      for (const [reqId, file] of entries) {
+        const fd = new FormData();
+        fd.append("document", file);
+        await api.post(`/agents/documents/${reqId}`, fd);
+      }
+      toast.success("Documents uploaded! Almost done.");
+      setStep(3);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Failed to upload one or more documents");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ─── STEP 3: Bank details (optional) then finish ──────────────────────────
+  const handleStep3 = async () => {
+    setLoading(true);
+    try {
+      const hasBankDetails = bankForm.accountNumber && bankForm.holderName && bankForm.ifscCode && bankForm.bankName;
+      if (hasBankDetails) {
+        await api.put("/agents/bank-details", bankForm);
+      }
+      toast.success("Registration complete! Your profile is under review.");
+      navigate("/agent/dashboard");
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Failed to save bank details");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ─── USER REGISTRATION (unchanged) ───────────────────────────────────────
+  const handleUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await api.post("/auth/user/register", {
+        email: form.email, password: form.password, name: form.name,
+        address: form.address, pin: form.pin, city: form.city, phone: form.phone, phoneCountry: form.phoneCountry,
+      });
+      toast.success("Registration successful! Please login.");
       navigate("/login");
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Registration failed");
@@ -163,7 +260,7 @@ export default function Register() {
     </div>
   );
 
-  // ─── USER REGISTRATION ────────────────────────────
+  // ─── USER REGISTRATION UI ─────────────────────────────────────────────────
   if (role === "USER") {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -180,16 +277,16 @@ export default function Register() {
               </button>
             ))}
           </div>
-          <form onSubmit={handleSubmit} className="space-y-2.5">
+          <form onSubmit={handleUserSubmit} className="space-y-2.5">
             <input type="text" required value={form.name} onChange={set("name")} className={inputCls} placeholder="Full name" />
             <input type="email" required value={form.email} onChange={set("email")} className={inputCls} placeholder="Email address" />
             <input type="password" required value={form.password} onChange={set("password")} className={inputCls} placeholder="Password" />
             <div className="flex gap-2">
-              <input type="text" inputMode="numeric" value={form.phone} onChange={handlePhoneInput} className={inputCls} placeholder="Phone number (optional)" />
-              <select value={form.phoneCountry} onChange={set("phoneCountry")} className={`${inputCls} w-24 flex-shrink-0`}>
+              <select value={form.phoneCountry} onChange={set("phoneCountry")} className="w-[110px] flex-shrink-0 px-2 py-2 bg-gray-50 border border-gray-200 rounded-md focus:ring-1 focus:ring-gray-400 focus:bg-white outline-none text-sm cursor-pointer">
                 <option value="INDIA">🇮🇳 India</option>
                 <option value="USA">🇺🇸 USA</option>
               </select>
+              <input type="text" inputMode="numeric" value={form.phone} onChange={handlePhoneInput} className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md focus:ring-1 focus:ring-gray-400 focus:bg-white outline-none text-sm min-w-0" placeholder="Phone number (optional)" />
             </div>
             <input type="text" required value={form.address} onChange={set("address")} className={inputCls} placeholder="Address" />
             <div className="grid grid-cols-2 gap-2">
@@ -210,23 +307,31 @@ export default function Register() {
     );
   }
 
-  // ─── AGENT MULTI-STEP REGISTRATION ────────────────
+  // ─── AGENT MULTI-STEP REGISTRATION UI ────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg border border-gray-200 w-full max-w-md p-6">
         <div className="text-center mb-4">
-          <h1 className="text-lg font-bold text-gray-900">Become a Partner</h1>
-          <p className="text-gray-400 text-xs mt-0.5">Join Urban<span className="text-amber-500">Comp</span> as a service provider</p>
+          <h1 className="text-lg font-bold text-gray-900">
+            {isResuming ? "Complete Your Profile" : "Become a Partner"}
+          </h1>
+          <p className="text-gray-400 text-xs mt-0.5">
+            {isResuming
+              ? "Pick up where you left off"
+              : <>Join Urban<span className="text-amber-500">Comp</span> as a service provider</>}
+          </p>
         </div>
 
-        <div className="flex gap-1 bg-gray-100 rounded-md p-0.5 mb-4">
-          {(["USER", "AGENT"] as const).map((r) => (
-            <button key={r} onClick={() => { setRoleState(r); setStep(0); }}
-              className={`flex-1 py-2 text-xs font-semibold rounded-md transition ${role === r ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"}`}>
-              {r === "USER" ? "Customer" : "Service Partner"}
-            </button>
-          ))}
-        </div>
+        {!isResuming && (
+          <div className="flex gap-1 bg-gray-100 rounded-md p-0.5 mb-4">
+            {(["USER", "AGENT"] as const).map((r) => (
+              <button key={r} onClick={() => { setRoleState(r); setStep(0); }}
+                className={`flex-1 py-2 text-xs font-semibold rounded-md transition ${role === r ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"}`}>
+                {r === "USER" ? "Customer" : "Service Partner"}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Step indicator */}
         <div className="flex items-center gap-1 mb-5">
@@ -245,17 +350,20 @@ export default function Register() {
             <input type="email" value={form.email} onChange={set("email")} className={inputCls} placeholder="Email address" />
             <input type="password" value={form.password} onChange={set("password")} className={inputCls} placeholder="Password" />
             <div className="flex gap-2">
-              <input type="text" inputMode="numeric" value={form.phone} onChange={handlePhoneInput} className={inputCls} placeholder="Phone number (optional)" />
-              <select value={form.phoneCountry} onChange={set("phoneCountry")} className={`${inputCls} w-24 flex-shrink-0`}>
+              <select value={form.phoneCountry} onChange={set("phoneCountry")} className="w-[110px] flex-shrink-0 px-2 py-2 bg-gray-50 border border-gray-200 rounded-md focus:ring-1 focus:ring-gray-400 focus:bg-white outline-none text-sm cursor-pointer">
                 <option value="INDIA">🇮🇳 India</option>
                 <option value="USA">🇺🇸 USA</option>
               </select>
+              <input type="text" inputMode="numeric" value={form.phone} onChange={handlePhoneInput} className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md focus:ring-1 focus:ring-gray-400 focus:bg-white outline-none text-sm min-w-0" placeholder="Phone number (optional)" />
             </div>
             <input type="text" value={form.address} onChange={set("address")} className={inputCls} placeholder="Address" />
             <div className="grid grid-cols-2 gap-2">
               <input type="text" inputMode="numeric" pattern="[0-9]*" value={form.pin} onChange={(e) => { const val = e.target.value.replace(/\D/g, ""); setForm({ ...form, pin: val }); }} className={inputCls} placeholder="PIN code" />
               <CityField />
             </div>
+            <p className="text-[10px] text-gray-400 pt-0.5">
+              💡 Your account will be created on the next step — you can save your progress and resume later.
+            </p>
           </div>
         )}
 
@@ -288,38 +396,54 @@ export default function Register() {
         {/* STEP 2: Document Uploads */}
         {step === 2 && (
           <div>
-            <p className="text-sm text-gray-600 mb-3">Upload required documents for your selected categories:</p>
-            {uniqueDocReqs.length === 0 ? (
-              <p className="text-gray-400 text-sm text-center py-4">No documents required. You can proceed!</p>
+            {profileLoading ? (
+              <p className="text-gray-400 text-sm text-center py-8">Loading your documents...</p>
             ) : (
-              <div className="space-y-3">
-                {uniqueDocReqs.map((req) => (
-                  <div key={req.id}>
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <label className="block text-[11px] text-gray-500 uppercase font-medium">{req.name}</label>
-                      {req.isRequired && <span className="text-[9px] text-red-500 font-bold">REQUIRED</span>}
-                    </div>
-                    {req.description && <p className="text-[10px] text-gray-400 mb-1">{req.description}</p>}
-                    {docPreviews[req.id] ? (
-                      <div className="relative rounded-md overflow-hidden border border-gray-200 bg-gray-50">
-                        <img src={docPreviews[req.id]} alt={req.name} className="w-full h-24 object-cover" />
-                        <button type="button" onClick={() => removeDoc(req.id)}
-                          className="absolute top-1 right-1 bg-white/90 rounded-full p-0.5 shadow hover:bg-red-50">
-                          <X size={12} className="text-red-500" />
-                        </button>
-                        <p className="text-[10px] text-gray-400 text-center py-0.5 truncate px-1">{docFiles[req.id]?.name}</p>
+              <>
+                <p className="text-sm text-gray-600 mb-3">Upload required documents for your selected categories:</p>
+                {uniqueDocReqs.length === 0 ? (
+                  <p className="text-gray-400 text-sm text-center py-4">No documents required. You can proceed!</p>
+                ) : (
+                  <div className="space-y-3">
+                    {uniqueDocReqs.map((req) => (
+                      <div key={req.id}>
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <label className="block text-[11px] text-gray-500 uppercase font-medium">{req.name}</label>
+                          {req.isRequired && <span className="text-[9px] text-red-500 font-bold">REQUIRED</span>}
+                          {alreadyUploadedReqIds.has(req.id) && (
+                            <span className="text-[9px] text-green-600 font-bold ml-auto">✓ UPLOADED</span>
+                          )}
+                        </div>
+                        {req.description && <p className="text-[10px] text-gray-400 mb-1">{req.description}</p>}
+                        {alreadyUploadedReqIds.has(req.id) && !docPreviews[req.id] ? (
+                          <div className="flex items-center gap-2 h-12 border border-green-200 bg-green-50 rounded-md px-3">
+                            <span className="text-green-600 text-xs font-medium">Already uploaded ✓</span>
+                            <button type="button" onClick={() => {
+                              setAlreadyUploadedReqIds(prev => { const n = new Set(prev); n.delete(req.id); return n; });
+                            }} className="ml-auto text-[10px] text-gray-400 hover:text-red-500 transition">Replace</button>
+                          </div>
+                        ) : docPreviews[req.id] ? (
+                          <div className="relative rounded-md overflow-hidden border border-gray-200 bg-gray-50">
+                            <img src={docPreviews[req.id]} alt={req.name} className="w-full h-24 object-cover" />
+                            <button type="button" onClick={() => removeDoc(req.id)}
+                              className="absolute top-1 right-1 bg-white/90 rounded-full p-0.5 shadow hover:bg-red-50">
+                              <X size={12} className="text-red-500" />
+                            </button>
+                            <p className="text-[10px] text-gray-400 text-center py-0.5 truncate px-1">{docFiles[req.id]?.name}</p>
+                          </div>
+                        ) : (
+                          <label className="flex flex-col items-center justify-center h-24 border-2 border-dashed border-gray-200 rounded-md cursor-pointer hover:border-gray-400 transition">
+                            <Camera size={18} className="text-gray-300 mb-0.5" />
+                            <span className="text-[11px] text-gray-400">Upload</span>
+                            <span className="text-[9px] text-gray-300">JPEG, PNG, WebP · 5 MB</span>
+                            <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleDocFile(req.id)} />
+                          </label>
+                        )}
                       </div>
-                    ) : (
-                      <label className="flex flex-col items-center justify-center h-24 border-2 border-dashed border-gray-200 rounded-md cursor-pointer hover:border-gray-400 transition">
-                        <Camera size={18} className="text-gray-300 mb-0.5" />
-                        <span className="text-[11px] text-gray-400">Upload</span>
-                        <span className="text-[9px] text-gray-300">JPEG, PNG, WebP · 5 MB</span>
-                        <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleDocFile(req.id)} />
-                      </label>
-                    )}
+                    ))}
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </div>
         )}
@@ -337,24 +461,51 @@ export default function Register() {
 
         {/* Navigation Buttons */}
         <div className="flex gap-2 mt-5">
-          {step > 0 && (
+          {step > 0 && step !== (isResuming ? resumeStep : 0) && (
             <button type="button" onClick={() => setStep(step - 1)}
               className="flex items-center gap-1 px-4 py-2.5 bg-gray-100 text-gray-600 rounded-full text-sm font-semibold hover:bg-gray-200 active:scale-[0.97] transition-all">
               <ChevronLeft size={14} /> Back
             </button>
           )}
-          {step < 3 ? (
-            <button type="button" onClick={() => setStep(step + 1)} disabled={!canProceedStep(step)}
+
+          {step === 0 && (
+            <button type="button" onClick={handleStep0} disabled={!canProceedStep(0)}
               className="flex-1 flex items-center justify-center gap-1 py-2.5 bg-gray-900 text-white rounded-full text-sm font-semibold hover:bg-gray-800 active:scale-[0.98] disabled:opacity-50 transition-all shadow-sm">
               Next <ChevronRight size={14} />
             </button>
-          ) : (
-            <button type="button" onClick={() => handleSubmit()} disabled={loading}
+          )}
+
+          {step === 1 && (
+            <button type="button" onClick={handleStep1} disabled={!canProceedStep(1) || loading}
+              className="flex-1 flex items-center justify-center gap-1 py-2.5 bg-gray-900 text-white rounded-full text-sm font-semibold hover:bg-gray-800 active:scale-[0.98] disabled:opacity-50 transition-all shadow-sm">
+              {loading
+                ? (isResuming ? "Saving..." : "Creating Account...")
+                : (isResuming ? <>Save Categories <ChevronRight size={14} /></> : <>Create Account & Continue <ChevronRight size={14} /></>)
+              }
+            </button>
+          )}
+
+          {step === 2 && (
+            <button type="button" onClick={handleStep2} disabled={!canProceedStep(2) || loading}
+              className="flex-1 flex items-center justify-center gap-1 py-2.5 bg-gray-900 text-white rounded-full text-sm font-semibold hover:bg-gray-800 active:scale-[0.98] disabled:opacity-50 transition-all shadow-sm">
+              {loading ? "Uploading..." : <>Upload Documents <ChevronRight size={14} /></>}
+            </button>
+          )}
+
+          {step === 3 && (
+            <button type="button" onClick={handleStep3} disabled={loading}
               className="flex-1 py-2.5 bg-gray-900 text-white rounded-full text-sm font-semibold hover:bg-gray-800 active:scale-[0.98] disabled:opacity-50 transition-all shadow-sm">
-              {loading ? "Submitting..." : "Submit for Verification"}
+              {loading ? "Finishing..." : "Complete Registration"}
             </button>
           )}
         </div>
+
+        {step === 3 && (
+          <button type="button" onClick={() => navigate("/agent/dashboard")}
+            className="w-full mt-2 py-2 text-xs text-gray-400 hover:text-gray-600 transition">
+            Skip bank details for now →
+          </button>
+        )}
 
         <p className="text-center text-xs text-gray-400 mt-5">
           Already have an account?{" "}

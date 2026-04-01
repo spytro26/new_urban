@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Plus, Trash2, Edit, X, Check, Save } from "lucide-react";
 import api from "../../api";
+import toast from "react-hot-toast";
 
 type FAQ = {
   id: number;
@@ -79,15 +80,23 @@ export default function AdminSettings() {
   const handleSaveAllSettings = async () => {
     setSaving(true);
     try {
+      let savedCount = 0;
       for (const def of DEFAULT_SETTINGS) {
         const value = settingsForm[def.key];
         if (value) {
           await api.post("/admin/settings", { key: def.key, value, label: def.label });
+          savedCount++;
         }
       }
+      if (savedCount === 0) {
+        toast.error("Please fill in at least one field to save");
+      } else {
+        toast.success("Contact info saved successfully!");
+      }
       fetchData();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to save settings", err);
+      toast.error(err.response?.data?.error || "Failed to save settings");
     } finally {
       setSaving(false);
     }
@@ -99,15 +108,18 @@ export default function AdminSettings() {
     try {
       if (editingFaq) {
         await api.put(`/admin/faqs/${editingFaq.id}`, faqForm);
+        toast.success("FAQ updated!");
       } else {
         await api.post("/admin/faqs", faqForm);
+        toast.success("FAQ added!");
       }
       setFaqForm({ question: "", answer: "", order: 0 });
       setShowFaqForm(false);
       setEditingFaq(null);
       fetchData();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to save FAQ", err);
+      toast.error(err.response?.data?.error || "Failed to save FAQ");
     }
   };
 
@@ -121,18 +133,22 @@ export default function AdminSettings() {
     if (!confirm("Delete this FAQ?")) return;
     try {
       await api.delete(`/admin/faqs/${id}`);
+      toast.success("FAQ deleted");
       fetchData();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to delete FAQ", err);
+      toast.error(err.response?.data?.error || "Failed to delete FAQ");
     }
   };
 
   const handleToggleFaq = async (faq: FAQ) => {
     try {
       await api.put(`/admin/faqs/${faq.id}`, { isActive: !faq.isActive });
+      toast.success(faq.isActive ? "FAQ hidden" : "FAQ activated");
       fetchData();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to toggle FAQ", err);
+      toast.error(err.response?.data?.error || "Failed to update FAQ");
     }
   };
 

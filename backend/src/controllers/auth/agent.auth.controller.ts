@@ -1,7 +1,6 @@
 import type { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-// import { Prisma } from "../../../db/src/generated/prisma/client.ts";
 import { prisma } from "../../../db/index.ts";
 import { env } from "../../config/env.ts";
 import { cloudinary } from "../../config/cloudinary.ts";
@@ -107,14 +106,7 @@ export async function registerAgent(
     return;
   }
 
-  // Need at least a type or categoryIds
-  if (!type && categoryIds.length === 0) {
-    res.status(400).json({
-      message:
-        "At least one service category is required (type or categoryIds)",
-    });
-    return;
-  }
+  // Categories are optional at registration — agent can add them in step 2 onboarding
 
   // Bank details are optional during registration — agent can add later on profile
   const hasBankDetails = accountNumber && holderName && ifscCode && bankName;
@@ -272,13 +264,22 @@ export async function registerAgent(
 
   const primaryAddress = agent.address[0] ?? null;
 
+  // Issue a JWT so the frontend can immediately continue as an authenticated agent
+  const token = jwt.sign(
+    { id: agent.id, email: agent.email, role: "AGENT" },
+    env.JWT_AGENT_SECRET,
+    { expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions["expiresIn"] },
+  );
+
   res.status(201).json({
     message: "Agent registered successfully",
+    token,
     agent: {
       id: agent.id,
       email: agent.email,
       name: agent.name,
       type: agent.type,
+      phone: agent.phone,
       address: primaryAddress?.address ?? null,
       pin: primaryAddress?.pin ?? null,
       city: primaryAddress?.city ?? null,

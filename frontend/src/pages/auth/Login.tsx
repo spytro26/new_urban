@@ -12,6 +12,44 @@ export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
+  /** After login, fetch agent profile to determine if onboarding is incomplete */
+  const checkAgentOnboarding = async (): Promise<number | null> => {
+    try {
+      const res = await api.get("/agents/profile");
+      const agent = res.data.agent;
+
+      // Step 1: No categories selected yet
+      if (!agent.categories || agent.categories.length === 0) return 1;
+
+      // Collect all required document requirement IDs across all categories
+      const requiredReqIds = new Set<number>();
+      for (const ac of agent.categories) {
+        const reqs = ac.category?.documentRequirements ?? [];
+        for (const req of reqs) {
+          if (req.isRequired) requiredReqIds.add(req.id);
+        }
+      }
+
+      // Check which required docs are already uploaded (status PENDING or APPROVED)
+      const uploadedReqIds = new Set<number>(
+        (agent.documents ?? [])
+          .filter((d: any) => d.status !== "REJECTED")
+          .map((d: any) => d.requirementId)
+      );
+
+      const missingDocs = [...requiredReqIds].some((id) => !uploadedReqIds.has(id));
+
+      // Step 2: Has categories but missing required docs
+      if (missingDocs) return 2;
+
+      // All done — go to dashboard
+      return null;
+    } catch (err) {
+      console.error("checkAgentOnboarding error:", err);
+      return null; // If profile fetch fails, just go to dashboard
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -20,16 +58,28 @@ export default function Login() {
       const res = await api.post(endpoint, { email, password });
       const data = res.data;
       const userData = data.user || data.agent;
+      // Store token first so subsequent API calls are authenticated
       login(data.token, { ...userData, role }, role);
       toast.success("Login successful!");
-      if (role === "USER") navigate("/");
-      else navigate("/agent/dashboard");
+
+      if (role === "AGENT") {
+        const resumeStep = await checkAgentOnboarding();
+        if (resumeStep !== null) {
+          toast("Let's finish setting up your profile!", { icon: "📋" });
+          navigate("/register", { state: { resumeStep } });
+        } else {
+          navigate("/agent/dashboard");
+        }
+      } else {
+        navigate("/");
+      }
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Login failed");
     } finally {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">

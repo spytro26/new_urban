@@ -421,7 +421,17 @@ router.get("/profile", async (req, res) => {
         bankDetails: true,
         categories: {
           include: {
-            category: { select: { id: true, name: true, slug: true } },
+            category: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                documentRequirements: {
+                  select: { id: true, name: true, description: true, isRequired: true },
+                  orderBy: { id: "asc" },
+                },
+              },
+            },
           },
           orderBy: { id: "asc" },
         },
@@ -896,4 +906,43 @@ router.post(
   },
 );
 
+// ─── 13. Save categories for agent (onboarding step 1) ─────────────────
+router.post("/categories/save", async (req, res) => {
+  try {
+    const agentId = req.user!.id;
+    const { categoryIds } = req.body as { categoryIds?: number[] };
+
+    if (!Array.isArray(categoryIds) || categoryIds.length === 0) {
+      return res.status(400).json({ error: "categoryIds is required and must be a non-empty array" });
+    }
+
+    const ids = categoryIds.map(Number).filter((n) => !isNaN(n));
+
+    // Verify categories exist
+    const cats = await prisma.category.findMany({
+      where: { id: { in: ids }, isActive: true },
+      select: { id: true },
+    });
+    if (cats.length !== ids.length) {
+      return res.status(400).json({ error: "One or more category IDs are invalid or inactive" });
+    }
+
+    // Upsert — skip if already exists
+    await prisma.agentCategory.createMany({
+      data: ids.map((catId) => ({ agentId, categoryId: catId })),
+      skipDuplicates: true,
+    });
+
+    const updated = await prisma.agentCategory.findMany({
+      where: { agentId },
+      include: { category: { select: { id: true, name: true, slug: true, documentRequirements: { select: { id: true, name: true, description: true, isRequired: true } } } } },
+    });
+
+    res.json({ message: "Categories saved", categories: updated });
+  } catch {
+    res.status(500).json({ error: "Something went wrong" });
+  }
+});
+
 export default router;
+
