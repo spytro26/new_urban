@@ -18,9 +18,9 @@ export async function registerUser(req: Request, res: Response): Promise<void> {
       profilepic?: string;
     };
 
-  if (!email || !password || !address || !pin) {
+  if (!email || !password || !address || !pin || !phone) {
     res.status(400).json({
-      message: "Required fields: email, password, address, pin",
+      message: "Required fields: email, password, address, pin, phone",
     });
     return;
   }
@@ -31,21 +31,23 @@ export async function registerUser(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const hashedPassword = await bcrypt.hash(password, 10);
-
-  // Format phone number with country code
-  let formattedPhone: string | undefined;
-  if (phone) {
-    const countryCode = phoneCountry === "USA" ? "+1" : "+91";
-    formattedPhone = `${countryCode}${phone}`;
+  // Check phone uniqueness (format with country code first)
+  const countryCode = phoneCountry === "USA" ? "+1" : "+91";
+  const normalizedPhone = `${countryCode}${phone}`;
+  const existingPhone = await prisma.user.findFirst({ where: { phone: normalizedPhone } });
+  if (existingPhone) {
+    res.status(409).json({ message: "Phone number is already registered" });
+    return;
   }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
 
   const user = await prisma.user.create({
     data: {
       email,
       password: hashedPassword,
       ...(name && { name }),
-      ...(formattedPhone && { phone: formattedPhone }),
+      phone: normalizedPhone,
       ...(profilepic && { profilepic }),
       address: {
         create: {

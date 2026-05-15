@@ -3,12 +3,40 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import api from "../../api";
 import toast from "react-hot-toast";
 import { useAuth } from "../../context/AuthContext";
-import { Camera, X, ChevronRight, ChevronLeft, Check } from "lucide-react";
+import { Camera, X, ChevronRight, ChevronLeft, Check, ChevronDown } from "lucide-react";
 
 type Category = { id: number; name: string; slug: string; documentRequirements: DocReq[] };
 type DocReq = { id: number; name: string; description: string | null; isRequired: boolean };
 
 const STEPS_AGENT = ["Basic Info", "Categories", "Documents", "Bank Details"];
+
+function IndiaFlag() {
+  return (
+    <svg width="22" height="15" viewBox="0 0 22 15" xmlns="http://www.w3.org/2000/svg">
+      <rect width="22" height="5" fill="#FF9933" />
+      <rect y="5" width="22" height="5" fill="#FFFFFF" />
+      <rect y="10" width="22" height="5" fill="#138808" />
+      <circle cx="11" cy="7.5" r="2" fill="none" stroke="#000080" strokeWidth="0.6" />
+      <circle cx="11" cy="7.5" r="0.4" fill="#000080" />
+    </svg>
+  );
+}
+
+function USAFlag() {
+  return (
+    <svg width="22" height="15" viewBox="0 0 22 15" xmlns="http://www.w3.org/2000/svg">
+      {[0,1,2,3,4,5].map((i) => (
+        <rect key={i} y={i * 2.5} width="22" height="2.5" fill={i % 2 === 0 ? "#B22234" : "#FFFFFF"} />
+      ))}
+      <rect width="9" height="8" fill="#3C3B6E" />
+    </svg>
+  );
+}
+
+const COUNTRIES = [
+  { value: "INDIA", label: "India", code: "+91", Flag: IndiaFlag },
+  { value: "USA", label: "USA", code: "+1", Flag: USAFlag },
+];
 
 export default function Register() {
   const { login, token, role: authRole } = useAuth();
@@ -36,6 +64,8 @@ export default function Register() {
   const [citySuggestions, setCitySuggestions] = useState<typeof cities>([]);
   const [showCitySuggestions, setShowCitySuggestions] = useState(false);
   const cityRef = useRef<HTMLDivElement>(null);
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const countryPickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     api.get("/auth/cities/active").then((r) => setCities(r.data.cities)).catch(() => {});
@@ -67,6 +97,7 @@ export default function Register() {
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (cityRef.current && !cityRef.current.contains(e.target as Node)) setShowCitySuggestions(false);
+      if (countryPickerRef.current && !countryPickerRef.current.contains(e.target as Node)) setShowCountryPicker(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -242,23 +273,6 @@ export default function Register() {
 
   const inputCls = "w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-md focus:ring-1 focus:ring-gray-400 focus:bg-white outline-none text-sm";
 
-  const CityField = () => (
-    <div className="relative" ref={cityRef}>
-      <input type="text" value={form.city} onChange={set("city")}
-        onFocus={() => { if (form.city.trim()) setShowCitySuggestions(true); }}
-        className={inputCls} placeholder="City" />
-      {showCitySuggestions && citySuggestions.length > 0 && (
-        <div className="absolute z-20 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-32 overflow-y-auto">
-          {citySuggestions.map((c) => (
-            <button key={c.id} type="button" onClick={() => pickCity(c.name)}
-              className="w-full text-left px-2.5 py-1.5 hover:bg-gray-50 text-xs capitalize border-b border-gray-50 last:border-0">
-              {c.name} {c.state && <span className="text-[10px] text-gray-400">({c.state})</span>}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 
   // ─── USER REGISTRATION UI ─────────────────────────────────────────────────
   if (role === "USER") {
@@ -282,16 +296,44 @@ export default function Register() {
             <input type="email" required value={form.email} onChange={set("email")} className={inputCls} placeholder="Email address" />
             <input type="password" required value={form.password} onChange={set("password")} className={inputCls} placeholder="Password" />
             <div className="flex gap-2">
-              <select value={form.phoneCountry} onChange={set("phoneCountry")} className="w-[110px] flex-shrink-0 px-2 py-2 bg-gray-50 border border-gray-200 rounded-md focus:ring-1 focus:ring-gray-400 focus:bg-white outline-none text-sm cursor-pointer">
-                <option value="INDIA">🇮🇳 India</option>
-                <option value="USA">🇺🇸 USA</option>
-              </select>
-              <input type="text" inputMode="numeric" value={form.phone} onChange={handlePhoneInput} className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md focus:ring-1 focus:ring-gray-400 focus:bg-white outline-none text-sm min-w-0" placeholder="Phone number (optional)" />
+              <div className="relative w-[110px] flex-shrink-0" ref={countryPickerRef}>
+                <button type="button" onClick={() => setShowCountryPicker((v) => !v)}
+                  className="w-full px-2 py-2 bg-gray-50 border border-gray-200 rounded-md focus:ring-1 focus:ring-gray-400 outline-none text-sm cursor-pointer flex items-center justify-between gap-1">
+                  {(() => { const C = COUNTRIES.find((c) => c.value === form.phoneCountry) ?? COUNTRIES[0]; return <><C.Flag /><span className="text-xs">{C.code}</span></>; })()}
+                  <ChevronDown size={12} className="text-gray-400 shrink-0" />
+                </button>
+                {showCountryPicker && (
+                  <div className="absolute z-30 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1">
+                    {COUNTRIES.map((c) => (
+                      <button key={c.value} type="button"
+                        onClick={() => { setForm({ ...form, phoneCountry: c.value }); setShowCountryPicker(false); }}
+                        className="w-full text-left px-2.5 py-1.5 hover:bg-gray-50 text-sm border-b border-gray-50 last:border-0 flex items-center gap-2">
+                        <c.Flag />{c.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <input type="text" inputMode="numeric" required value={form.phone} onChange={handlePhoneInput} className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md focus:ring-1 focus:ring-gray-400 focus:bg-white outline-none text-sm min-w-0" placeholder="Phone number" />
             </div>
             <input type="text" required value={form.address} onChange={set("address")} className={inputCls} placeholder="Address" />
             <div className="grid grid-cols-2 gap-2">
               <input type="text" inputMode="numeric" pattern="[0-9]*" required value={form.pin} onChange={(e) => { const val = e.target.value.replace(/\D/g, ""); setForm({ ...form, pin: val }); }} className={inputCls} placeholder="PIN code" />
-              <CityField />
+              <div className="relative" ref={cityRef}>
+                <input type="text" value={form.city} onChange={set("city")}
+                  onFocus={() => { if (form.city.trim()) setShowCitySuggestions(true); }}
+                  className={inputCls} placeholder="City" />
+                {showCitySuggestions && citySuggestions.length > 0 && (
+                  <div className="absolute z-20 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-32 overflow-y-auto">
+                    {citySuggestions.map((c) => (
+                      <button key={c.id} type="button" onClick={() => pickCity(c.name)}
+                        className="w-full text-left px-2.5 py-1.5 hover:bg-gray-50 text-xs capitalize border-b border-gray-50 last:border-0">
+                        {c.name} {c.state && <span className="text-[10px] text-gray-400">({c.state})</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <button type="submit" disabled={loading}
               className="w-full py-2.5 bg-gray-900 text-white rounded-full text-sm font-semibold hover:bg-gray-800 active:scale-[0.98] disabled:opacity-50 transition-all shadow-sm mt-1">
@@ -350,16 +392,44 @@ export default function Register() {
             <input type="email" value={form.email} onChange={set("email")} className={inputCls} placeholder="Email address" />
             <input type="password" value={form.password} onChange={set("password")} className={inputCls} placeholder="Password" />
             <div className="flex gap-2">
-              <select value={form.phoneCountry} onChange={set("phoneCountry")} className="w-[110px] flex-shrink-0 px-2 py-2 bg-gray-50 border border-gray-200 rounded-md focus:ring-1 focus:ring-gray-400 focus:bg-white outline-none text-sm cursor-pointer">
-                <option value="INDIA">🇮🇳 India</option>
-                <option value="USA">🇺🇸 USA</option>
-              </select>
-              <input type="text" inputMode="numeric" value={form.phone} onChange={handlePhoneInput} className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md focus:ring-1 focus:ring-gray-400 focus:bg-white outline-none text-sm min-w-0" placeholder="Phone number (optional)" />
+              <div className="relative w-[110px] flex-shrink-0" ref={countryPickerRef}>
+                <button type="button" onClick={() => setShowCountryPicker((v) => !v)}
+                  className="w-full px-2 py-2 bg-gray-50 border border-gray-200 rounded-md focus:ring-1 focus:ring-gray-400 outline-none text-sm cursor-pointer flex items-center justify-between gap-1">
+                  {(() => { const C = COUNTRIES.find((c) => c.value === form.phoneCountry) ?? COUNTRIES[0]; return <><C.Flag /><span className="text-xs">{C.code}</span></>; })()}
+                  <ChevronDown size={12} className="text-gray-400 shrink-0" />
+                </button>
+                {showCountryPicker && (
+                  <div className="absolute z-30 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1">
+                    {COUNTRIES.map((c) => (
+                      <button key={c.value} type="button"
+                        onClick={() => { setForm({ ...form, phoneCountry: c.value }); setShowCountryPicker(false); }}
+                        className="w-full text-left px-2.5 py-1.5 hover:bg-gray-50 text-sm border-b border-gray-50 last:border-0 flex items-center gap-2">
+                        <c.Flag />{c.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <input type="text" inputMode="numeric" value={form.phone} onChange={handlePhoneInput} className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-md focus:ring-1 focus:ring-gray-400 focus:bg-white outline-none text-sm min-w-0" placeholder="Phone number" />
             </div>
             <input type="text" value={form.address} onChange={set("address")} className={inputCls} placeholder="Address" />
             <div className="grid grid-cols-2 gap-2">
               <input type="text" inputMode="numeric" pattern="[0-9]*" value={form.pin} onChange={(e) => { const val = e.target.value.replace(/\D/g, ""); setForm({ ...form, pin: val }); }} className={inputCls} placeholder="PIN code" />
-              <CityField />
+              <div className="relative" ref={cityRef}>
+                <input type="text" value={form.city} onChange={set("city")}
+                  onFocus={() => { if (form.city.trim()) setShowCitySuggestions(true); }}
+                  className={inputCls} placeholder="City" />
+                {showCitySuggestions && citySuggestions.length > 0 && (
+                  <div className="absolute z-20 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-32 overflow-y-auto">
+                    {citySuggestions.map((c) => (
+                      <button key={c.id} type="button" onClick={() => pickCity(c.name)}
+                        className="w-full text-left px-2.5 py-1.5 hover:bg-gray-50 text-xs capitalize border-b border-gray-50 last:border-0">
+                        {c.name} {c.state && <span className="text-[10px] text-gray-400">({c.state})</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <p className="text-[10px] text-gray-400 pt-0.5">
               💡 Your account will be created on the next step — you can save your progress and resume later.

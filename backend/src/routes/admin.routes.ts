@@ -487,11 +487,7 @@ router.patch("/agents/documents/:docId", async (req, res) => {
         });
 
         if (requiredReqs.length === 0) {
-          // No required docs, auto-approve category
-          await prisma.agentCategory.update({
-            where: { agentId_categoryId: { agentId, categoryId: catId } },
-            data: { isVerified: true, rejectionNote: null },
-          });
+          // No required docs — do NOT auto-approve; admin must explicitly verify
           continue;
         }
 

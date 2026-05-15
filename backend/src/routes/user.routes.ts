@@ -550,6 +550,11 @@ router.post("/addresses", async (req, res) => {
       return res.status(400).json({ error: "address and pin are required" });
     }
 
+    const addressCount = await prisma.address.count({ where: { userId } });
+    if (addressCount >= 4) {
+      return res.status(400).json({ error: "You can only save up to 4 addresses" });
+    }
+
     const created = await prisma.address.create({
       data: {
         userId,

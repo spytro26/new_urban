@@ -85,6 +85,7 @@ export default function UserProfile() {
   };
 
   const startAddAddr = () => {
+    if (addresses.length >= 4) { toast.error("You can only save up to 4 addresses"); return; }
     setAddingAddr(true);
     setEditAddrId(null);
     setAddrForm({ label: "Home", address: "", pin: "", city: "" });
@@ -179,10 +180,13 @@ export default function UserProfile() {
             <h2 className="text-sm font-semibold text-gray-900">Addresses</h2>
             <span className="text-[10px] text-gray-400">({addresses.length})</span>
           </div>
-          {!addingAddr && !editAddrId && (
+          {!addingAddr && !editAddrId && addresses.length < 4 && (
             <button onClick={startAddAddr} className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-900 font-medium">
               <Plus size={12} /> Add
             </button>
+          )}
+          {addresses.length >= 4 && !addingAddr && !editAddrId && (
+            <span className="text-[10px] text-gray-400">Max 4 reached</span>
           )}
         </div>
 

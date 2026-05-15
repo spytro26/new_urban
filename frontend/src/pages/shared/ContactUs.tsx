@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Phone, Mail, MapPin, ChevronDown, ChevronUp, MessageCircle } from "lucide-react";
+import { Phone, Mail, ChevronDown, ChevronUp, MessageCircle } from "lucide-react";
 import api from "../../api";
 
 type FAQ = {
@@ -11,7 +11,6 @@ type FAQ = {
 type Settings = {
   contact_phone?: string;
   contact_email?: string;
-  contact_address?: string;
   contact_whatsapp?: string;
 };
 
@@ -53,7 +52,6 @@ export default function ContactUs() {
 
   const phone = settings.contact_phone || "+91 9876543210";
   const email = settings.contact_email || "support@urbancomp.com";
-  const address = settings.contact_address || "123, Service Street, City - 400001";
   const whatsapp = settings.contact_whatsapp || phone.replace(/\D/g, "");
 
   return (
@@ -106,16 +104,6 @@ export default function ContactUs() {
           </div>
         </a>
 
-        {/* Address */}
-        <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200">
-          <div className="w-12 h-12 bg-purple-50 rounded-full flex items-center justify-center flex-shrink-0">
-            <MapPin className="w-5 h-5 text-purple-600" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-gray-500 mb-0.5">Our Office</p>
-            <p className="text-sm md:text-base font-medium text-gray-900">{address}</p>
-          </div>
-        </div>
       </div>
 
       {/* FAQs */}

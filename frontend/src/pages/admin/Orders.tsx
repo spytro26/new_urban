@@ -130,19 +130,26 @@ export default function AdminOrders() {
 
   // Filter agents by service category (verified) + availability, then sort by pincode match
   const getFilteredSortedAgents = (order: any) => {
-    const orderCategory = getOrderCategory(order);
     const orderPin = order.addressUser?.pin;
     const orderCity = order.addressUser?.city;
+
+    // Collect all category IDs from the order's subservices
+    const orderCategoryIds: number[] = [
+      ...new Set(
+        (order.orders || [])
+          .map((o: any) => o.subservice?.category?.id)
+          .filter((id: any): id is number => id != null)
+      ),
+    ];
 
     // Only show available and verified agents
     let available = agents.filter((a) => a.isAvailable && a.isVerified);
 
-    // Filter by agents who are VERIFIED for the order's category
-    if (orderCategory) {
-      const cat = orderCategory.toLowerCase();
+    // Filter by agents who are VERIFIED for the order's category (compare by ID)
+    if (orderCategoryIds.length > 0) {
       available = available.filter((a) =>
         a.categories?.some(
-          (ac: any) => ac.isVerified && ac.category?.slug?.toLowerCase() === cat
+          (ac: any) => ac.isVerified && orderCategoryIds.includes(ac.category?.id)
         )
       );
     }
@@ -367,19 +374,19 @@ export default function AdminOrders() {
                                 )}
 
                                 <div className="flex items-center gap-2 mb-2">
-                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 ${
-                                    agent.type === "plumber" ? "bg-blue-500" : "bg-amber-500"
-                                  }`}>
+                                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 bg-gray-700">
                                     {agent.name?.charAt(0)?.toUpperCase()}
                                   </div>
                                   <div className="min-w-0">
                                     <p className="font-medium text-gray-900 text-xs truncate">{agent.name}</p>
                                     <p className="text-[10px] text-gray-500 truncate">{agent.email}</p>
-                                    <span className={`inline-block text-[10px] px-1 py-0.5 rounded ${
-                                      agent.type === "plumber" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
-                                    }`}>
-                                      {agent.type}
-                                    </span>
+                                    <div className="flex flex-wrap gap-1 mt-0.5">
+                                      {(agent.categories || []).filter((ac: any) => ac.isVerified).map((ac: any) => (
+                                        <span key={ac.id} className="inline-block text-[10px] px-1 py-0.5 rounded bg-green-100 text-green-700 capitalize">
+                                          {ac.category?.name}
+                                        </span>
+                                      ))}
+                                    </div>
                                   </div>
                                 </div>
 
